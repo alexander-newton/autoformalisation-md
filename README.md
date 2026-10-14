@@ -6,11 +6,11 @@ Lean's standard `propext`, `Classical.choice` and `Quot.sound`.
 
 | Benchmark | File | Main statements |
 |---|---|---|
-| **Myerson (1981)**: Myerson's lemma | `MechDesign/Myerson.lean` | `Myerson.Mech.IC_iff`, `Mech.IC.envelope`, `Mech.IC.monotoneOn` |
+| **Myerson (1981)**: Myerson's lemma | `MechDesign/Myerson.lean` | `Myerson.Mech.IC_iff`, `Supports.sub_eq`, `Mech.IC.envelope` |
 | Revenue equivalence | `MechDesign/Myerson.lean` | `Myerson.Mech.revenue_equivalence` |
 | Revenue = virtual surplus | `MechDesign/Myerson.lean` | `Myerson.revenue_eq_virtualSurplus` |
 | Optimal mechanism (posted price under regularity) | `MechDesign/Myerson.lean` | `Myerson.revenue_le`, `Myerson.postedPrice_optimal` |
-| **Doval–Skreta (2022)**: canonical mechanisms (beliefs as output messages) | `MechDesign/DovalSkreta.lean` | `canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |
+| **Doval–Skreta (2022)**: canonical mechanisms (beliefs as output messages) | `MechDesign/DovalSkreta.lean` | `Play.canonical_IC`, `Play.canonical_outcome_eq`, `Play.canonical_posterior`, `Play.canonical_bayesPlausible` |
 | Lagrangian strong duality (compact domain) | `MechDesign/Duality.lean` | `Duality.strong_duality` |
 | **Kolotilin (2018) / Dworczak–Kolotilin**: persuasion duality | `MechDesign/Persuasion.lean` | `Persuasion.weak_duality`, `exists_optimal`, `strong_duality` |
 
@@ -49,6 +49,24 @@ p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * We prove strong duality (no gap): value = inf_{y≥0} Σ μ(θ) p_y(θ).
 * Strong duality comes from an abstract theorem, `Duality.strong_duality`: there is no duality
   gap for linear programs over compact convex sets. Its proof is a Hahn–Banach separation.
+
+## Style
+
+The proofs aim to read like a Halmos textbook: name the one concept a proof keeps circling,
+prove a few short facts about it, and let each theorem be a short corollary.
+
+* **Myerson.** IC says exactly that `q` *supports* `U`: every chord slope lies between
+  `q`'s values at the chord's endpoints. Three facts about supports give Myerson's lemma:
+  supporting functions are monotone, a monotone function supports its integral, and two
+  functions supported by the same `f` differ by a constant. One integration-by-parts identity
+  for primitives gives the revenue formula.
+* **Doval–Skreta.** The prior, mechanism and strategy are bundled into a `Play`. The
+  canonical mechanism is the image of a play under "relabel each outcome by its posterior".
+  IC then follows from two facts about averages: an average lies below any upper bound, and
+  an average of maximisers is a maximum.
+* **Duality.** One Hahn–Banach separation does the work. The point `(0, OPT + ε)` lies
+  above the downward-closed image of the feasible set. Pushing that image downward shows the
+  separating functional has the right signs.
 
 ## Building
 
