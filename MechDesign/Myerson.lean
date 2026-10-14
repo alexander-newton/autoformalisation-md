@@ -23,6 +23,7 @@ A direct mechanism is a pair `(q, t)` of an allocation probability and a payment
 -/
 
 open MeasureTheory Set intervalIntegral
+open scoped Interval
 
 namespace Myerson
 
@@ -31,6 +32,8 @@ reported type. -/
 structure Mech where
   q : ℝ → ℝ
   t : ℝ → ℝ
+
+namespace Mech
 
 variable (m : Mech) (a b : ℝ)
 
@@ -191,21 +194,25 @@ theorem revenue_equivalence {m₁ m₂ : Mech} (h₁ : m₁.IC a b) (h₂ : m₂
   rw [hq a ha, ht, hi, hq θ hθ] at e₁
   linarith
 
+end Mech
+
+open Mech
+
 /-! ### Revenue and virtual surplus -/
 
-variable (f : ℝ → ℝ)
+variable {m : Mech} {a b : ℝ} (f : ℝ → ℝ)
 
 /-- Cumulative distribution function of the density `f` on `[a, b]`. -/
-noncomputable def cdf (θ : ℝ) : ℝ := ∫ s in a..θ, f s
+noncomputable def cdf (a : ℝ) (θ : ℝ) : ℝ := ∫ s in a..θ, f s
 
 /-- Virtual surplus density `J θ = θ f θ - (1 - F θ)`, i.e. `φ(θ) f(θ)`. -/
-noncomputable def J (θ : ℝ) : ℝ := θ * f θ - (1 - cdf a f θ)
+noncomputable def J (a : ℝ) (θ : ℝ) : ℝ := θ * f θ - (1 - cdf f a θ)
 
 /-- Expected revenue of a mechanism. -/
-noncomputable def revenue (m : Mech) : ℝ := ∫ θ in a..b, m.t θ * f θ
+noncomputable def revenue (a b : ℝ) (m : Mech) : ℝ := ∫ θ in a..b, m.t θ * f θ
 
-lemma J_eq_virtualValue_mul {θ : ℝ} (hf : f θ ≠ 0) :
-    J a f θ = (θ - (1 - cdf a f θ) / f θ) * f θ := by
+lemma J_eq_virtualValue_mul (a : ℝ) {θ : ℝ} (hf : f θ ≠ 0) :
+    J f a θ = (θ - (1 - cdf f a θ) / f θ) * f θ := by
   simp only [J]; field_simp
 
 variable {f}
@@ -214,13 +221,13 @@ variable {f}
 `f` on `[a, b]` and any IC mechanism, `E[t] = ∫ q J - U a`. -/
 theorem revenue_eq_virtualSurplus (hab : a ≤ b) (hf : ContinuousOn f (Icc a b))
     (hF : ∫ s in a..b, f s = 1) (h : m.IC a b) :
-    revenue a b f m = (∫ θ in a..b, m.q θ * J a f θ) - m.U a := by
+    revenue f a b m = (∫ θ in a..b, m.q θ * J f a θ) - m.U a := by
   have hu : uIcc a b = Icc a b := uIcc_of_le hab
   have ha : a ∈ uIcc a b := left_mem_uIcc
   have hfi : IntervalIntegrable f volume a b := (hu ▸ hf).intervalIntegrable
   have hqi : IntervalIntegrable m.q volume a b := (hu ▸ h.monotoneOn).intervalIntegrable
   set G : ℝ → ℝ := fun θ => ∫ s in a..θ, m.q s with hG
-  set F : ℝ → ℝ := fun θ => cdf a f θ - 1 with hFdef
+  set F : ℝ → ℝ := fun θ => cdf f a θ - 1 with hFdef
   have hGac : AbsolutelyContinuousOnInterval G a b :=
     hqi.absolutelyContinuousOnInterval_intervalIntegral ha
   have hFac : AbsolutelyContinuousOnInterval F a b :=
@@ -241,13 +248,15 @@ theorem revenue_eq_virtualSurplus (hab : a ≤ b) (hf : ContinuousOn f (Icc a b)
   have ibp := hGac.integral_mul_deriv_eq_deriv_mul hFac
   have hGa : G a = 0 := by simp [hG]
   have hFb : F b = 0 := by simp [hFdef, cdf, hF]
-  rw [hGa, hFb, integral_congr_ae (dF.mono fun x hx hxI => by rw [hx hxI]),
-    integral_congr_ae (dG.mono fun x hx hxI => by rw [hx hxI])] at ibp
+  rw [hGa, hFb, integral_congr_ae (f := fun x => G x * deriv F x) (g := fun x => G x * f x)
+      (dF.mono fun x hx hxI => by rw [hx hxI]),
+    integral_congr_ae (f := fun x => deriv G x * F x) (g := fun x => m.q x * F x)
+      (dG.mono fun x hx hxI => by rw [hx hxI])] at ibp
   simp only [zero_mul, mul_zero, sub_zero, zero_sub] at ibp
   -- assemble
   have hθqf : IntervalIntegrable (fun θ => θ * m.q θ * f θ) volume a b := by
     have := hqi.mul_continuousOn (g := fun θ => θ * f θ) (continuousOn_id.mul (hu ▸ hf))
-    refine this.congr (Filter.Eventually.of_forall fun θ => ?_); simp only; ring
+    exact this.congr fun θ _ => by ring
   have hGf : IntervalIntegrable (fun θ => G θ * f θ) volume a b :=
     hfi.continuousOn_mul hGc
   have hqF : IntervalIntegrable (fun θ => m.q θ * F θ) volume a b := hqi.mul_continuousOn hFc
@@ -255,8 +264,8 @@ theorem revenue_eq_virtualSurplus (hab : a ≤ b) (hf : ContinuousOn f (Icc a b)
   rw [integral_congr (g := fun θ => θ * m.q θ * f θ - m.U a * f θ - G θ * f θ)
     (fun θ hθ => by simp only; rw [ht θ (hu ▸ hθ)]; ring)]
   rw [integral_sub (hθqf.sub (hfi.const_mul _)) hGf, integral_sub hθqf (hfi.const_mul _),
-    integral_const_mul, hF, ibp]
-  rw [integral_congr (g := fun θ => θ * m.q θ * f θ + m.q θ * F θ)
+    intervalIntegral.integral_const_mul, hF, ibp]
+  rw [integral_congr (f := fun θ => m.q θ * J f a θ) (g := fun θ => θ * m.q θ * f θ + m.q θ * F θ)
     (fun θ _ => by simp only [J, hFdef]; ring), integral_add hθqf hqF]
   ring
 
@@ -264,21 +273,21 @@ theorem revenue_eq_virtualSurplus (hab : a ≤ b) (hf : ContinuousOn f (Icc a b)
 `[0, 1]` earns at most the expected positive part of the virtual surplus. -/
 theorem revenue_le (hab : a ≤ b) (hf : ContinuousOn f (Icc a b)) (hF : ∫ s in a..b, f s = 1)
     (h : m.IC a b) (hIR : m.IR a b) (hq : ∀ θ ∈ Icc a b, m.q θ ∈ Icc (0 : ℝ) 1) :
-    revenue a b f m ≤ ∫ θ in a..b, max (J a f θ) 0 := by
+    revenue f a b m ≤ ∫ θ in a..b, max (J f a θ) 0 := by
   have hu : uIcc a b = Icc a b := uIcc_of_le hab
-  have hJc : ContinuousOn (J a f) (Icc a b) := by
-    have hFc : ContinuousOn (cdf a f) (Icc a b) :=
+  have hJc : ContinuousOn (J f a) (Icc a b) := by
+    have hFc : ContinuousOn (cdf f a) (Icc a b) :=
       hu ▸ (((hu ▸ hf).intervalIntegrable).absolutelyContinuousOnInterval_intervalIntegral
         left_mem_uIcc).continuousOn
     exact (continuousOn_id.mul hf).sub (continuousOn_const.sub hFc)
   rw [revenue_eq_virtualSurplus hab hf hF h]
   have hUa := hIR a ⟨le_rfl, hab⟩
-  have : ∫ θ in a..b, m.q θ * J a f θ ≤ ∫ θ in a..b, max (J a f θ) 0 := by
+  have : ∫ θ in a..b, m.q θ * J f a θ ≤ ∫ θ in a..b, max (J f a θ) 0 := by
     refine integral_mono_on hab ?_ ?_ fun θ hθ => ?_
     · exact (hu ▸ h.monotoneOn).intervalIntegrable.mul_continuousOn (hu ▸ hJc)
-    · exact (hJc.max continuousOn_const).intervalIntegrable_of_Icc hab
+    · exact (ContinuousOn.sup hJc continuousOn_const).intervalIntegrable_of_Icc hab
     · obtain ⟨h0, h1⟩ := hq θ hθ
-      rcases le_total 0 (J a f θ) with hJ | hJ
+      rcases le_total 0 (J f a θ) with hJ | hJ
       · rw [max_eq_left hJ]; nlinarith
       · rw [max_eq_right hJ]; nlinarith
   linarith
@@ -306,9 +315,9 @@ surplus `J` single-crosses zero at `p` (regularity), the posted price `p` maximi
 among all IC and IR mechanisms. -/
 theorem postedPrice_optimal (hab : a ≤ b) (hf : ContinuousOn f (Icc a b))
     (hF : ∫ s in a..b, f s = 1) {p : ℝ} (hp : p ∈ Icc a b)
-    (hreg : ∀ θ ∈ Icc a b, (θ < p → J a f θ ≤ 0) ∧ (p ≤ θ → 0 ≤ J a f θ))
+    (hreg : ∀ θ ∈ Icc a b, (θ < p → J f a θ ≤ 0) ∧ (p ≤ θ → 0 ≤ J f a θ))
     (h : m.IC a b) (hIR : m.IR a b) (hq : ∀ θ ∈ Icc a b, m.q θ ∈ Icc (0 : ℝ) 1) :
-    revenue a b f m ≤ revenue a b f (postedPrice p) := by
+    revenue f a b m ≤ revenue f a b (postedPrice p) := by
   refine (revenue_le hab hf hF h hIR hq).trans (le_of_eq ?_)
   rw [revenue_eq_virtualSurplus hab hf hF (postedPrice_IC p), postedPrice_U,
     max_eq_right (by linarith [hp.1]), sub_zero]

@@ -1,12 +1,13 @@
 # MechDesign — a small, machine-checked mechanism-design library in Lean 4
 
 A compact Lean 4 / Mathlib formalisation of core results in mechanism and information
-design. Every theorem listed below is fully proved: there is no `sorry` and no extra axiom.
+design. Every theorem listed below is fully proved: there is no `sorry`, and `#print axioms` shows only
+Lean's standard `propext`, `Classical.choice` and `Quot.sound`.
 
 | Benchmark | File | Main statements |
 |---|---|---|
-| **Myerson (1981)**: Myerson's lemma | `MechDesign/Myerson.lean` | `Myerson.IC_iff`, `IC.envelope`, `IC.monotoneOn` |
-| Revenue equivalence | `MechDesign/Myerson.lean` | `Myerson.revenue_equivalence` |
+| **Myerson (1981)**: Myerson's lemma | `MechDesign/Myerson.lean` | `Myerson.Mech.IC_iff`, `Mech.IC.envelope`, `Mech.IC.monotoneOn` |
+| Revenue equivalence | `MechDesign/Myerson.lean` | `Myerson.Mech.revenue_equivalence` |
 | Revenue = virtual surplus | `MechDesign/Myerson.lean` | `Myerson.revenue_eq_virtualSurplus` |
 | Optimal mechanism (posted price under regularity) | `MechDesign/Myerson.lean` | `Myerson.revenue_le`, `Myerson.postedPrice_optimal` |
 | **Doval–Skreta (2022)**: canonical mechanisms (beliefs as output messages) | `MechDesign/DovalSkreta.lean` | `canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |

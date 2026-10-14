@@ -56,12 +56,14 @@ variable {μ v w}
 lemma lagrangian_eq (x : A × Θ → ℝ) (y : A × A → ℝ) :
     obj v x + ∑ p, y p * obed w x p = ∑ θ, ∑ a, x (a, θ) * lag v w y a θ := by
   simp only [obj, obed, lag, mul_add, sum_add_distrib, mul_sum, Fintype.sum_prod_type]
-  rw [sum_comm]; congr 1
-  rw [sum_comm]; refine sum_congr rfl fun a _ => ?_
-  rw [sum_comm]; refine sum_congr rfl fun a' _ => ?_
-  refine sum_congr rfl fun θ _ => ?_; ring
+  congr 1
+  · exact sum_comm
+  · conv_rhs => rw [sum_comm]
+    refine sum_congr rfl fun a _ => ?_
+    rw [sum_comm]
+    exact sum_congr rfl fun θ _ => sum_congr rfl fun a' _ => by ring
 
-lemma lagrangian_le (hx : x ∈ Schemes μ) (y : A × A → ℝ) :
+lemma lagrangian_le {x : A × Θ → ℝ} (hx : x ∈ Schemes μ) (y : A × A → ℝ) :
     ∑ θ, ∑ a, x (a, θ) * lag v w y a θ ≤ dualValue μ v w y := by
   refine sum_le_sum fun θ _ => ?_
   rw [← hx.2 θ, sum_mul]
@@ -77,7 +79,7 @@ theorem weak_duality {x : A × Θ → ℝ} (hx : x ∈ Schemes μ) (hob : Obedie
 
 /-! Topological facts. -/
 
-lemma schemes_convex : Convex ℝ (Schemes μ) := by
+lemma schemes_convex : Convex ℝ (Schemes μ : Set (A × Θ → ℝ)) := by
   intro x hx x' hx' s t hs ht hst
   refine ⟨fun i => ?_, fun θ => ?_⟩
   · simp only [Pi.zero_apply, Pi.add_apply, Pi.smul_apply, smul_eq_mul]
@@ -86,15 +88,16 @@ lemma schemes_convex : Convex ℝ (Schemes μ) := by
       hx'.2]
     rw [← add_mul, hst, one_mul]
 
-lemma schemes_compact : IsCompact (Schemes μ) := by
+lemma schemes_compact : IsCompact (Schemes μ : Set (A × Θ → ℝ)) := by
   refine Metric.isCompact_of_isClosed_isBounded ?_ ?_
   · have : Schemes μ = {x | 0 ≤ x} ∩ ⋂ θ, {x : A × Θ → ℝ | ∑ a, x (a, θ) = μ θ} := by
       ext x; simp [Schemes]
     rw [this]
     exact (isClosed_le continuous_const continuous_id).inter (isClosed_iInter fun θ =>
-      isClosed_eq (continuous_finset_sum _ fun a _ => continuous_apply _) continuous_const)
+      isClosed_eq (continuous_finsetSum _ fun a _ => continuous_apply _) continuous_const)
   · refine (Metric.isBounded_Icc (0 : A × Θ → ℝ) (fun i => μ i.2)).subset fun x hx => ?_
     refine ⟨hx.1, fun i => ?_⟩
+    show x i ≤ μ i.2
     rw [← hx.2 i.2]
     exact single_le_sum (f := fun a => x (a, i.2)) (fun a _ => hx.1 (a, i.2)) (mem_univ i.1)
 
@@ -115,7 +118,7 @@ lemma obedL_apply (x : A × Θ → ℝ) (p : A × A) : obedL w p x = obed w x p 
 theorem exists_optimal (hμ : 0 ≤ μ) :
     ∃ xs ∈ Schemes μ, Obedient w xs ∧ ∀ x ∈ Schemes μ, Obedient w x → obj v x ≤ obj v xs := by
   set F := Schemes μ ∩ {x | Obedient w x}
-  have hFc : IsCompact F := schemes_compact.inter_right (by
+  have hFc : IsCompact F := (schemes_compact (μ := μ)).inter_right (by
     have : {x | Obedient w x} = ⋂ p, {x : A × Θ → ℝ | 0 ≤ obedL w p x} := by
       ext x; simp [Obedient, obedL_apply]
     rw [this]; exact isClosed_iInter fun p => isClosed_le continuous_const (obedL w p).continuous)
@@ -123,12 +126,12 @@ theorem exists_optimal (hμ : 0 ≤ μ) :
   obtain ⟨a₀, -, ha₀⟩ := exists_max_image univ (fun a => ∑ θ, μ θ * w a θ) univ_nonempty
   set x₀ : A × Θ → ℝ := fun i => if i.1 = a₀ then μ i.2 else 0
   have hx₀ : x₀ ∈ F := by
-    refine ⟨⟨fun i => by simp only [x₀]; split_ifs <;> simp [hμ i.2], fun θ => by simp [x₀]⟩,
+    refine ⟨⟨fun i => by simp only [x₀]; split_ifs; exacts [hμ i.2, le_rfl], fun θ => by simp [x₀]⟩,
       fun p => ?_⟩
     simp only [obed, x₀]
     split_ifs with h
     · have := ha₀ p.2 (mem_univ _)
-      rw [← h] at this ⊢
+      rw [← h] at this
       simp only [mul_sub, sum_sub_distrib]; linarith
     · simp
   obtain ⟨xs, hxs, hmax⟩ := hFc.exists_isMaxOn ⟨x₀, hx₀⟩ (objL v).continuous.continuousOn
@@ -140,7 +143,7 @@ infimum over obedience multipliers `y ≥ 0` of the expected state price `∑ μ
 theorem strong_duality {xs : A × Θ → ℝ} (hxs : xs ∈ Schemes μ) (hob : Obedient w xs)
     (hopt : ∀ x ∈ Schemes μ, Obedient w x → obj v x ≤ obj v xs) {ε : ℝ} (hε : 0 < ε) :
     ∃ y : A × A → ℝ, 0 ≤ y ∧ dualValue μ v w y ≤ obj v xs + ε := by
-  obtain ⟨y, hy, hbound⟩ := Duality.strong_duality schemes_compact schemes_convex (objL v)
+  obtain ⟨y, hy, hbound⟩ := Duality.strong_duality (schemes_compact (μ := μ)) (schemes_convex (μ := μ)) (objL v)
     (obedL w) hxs (fun p => by rw [obedL_apply]; exact hob p)
     (fun x hx hg => by
       rw [objL_apply, objL_apply]; exact hopt x hx fun p => by rw [← obedL_apply]; exact hg p) hε
