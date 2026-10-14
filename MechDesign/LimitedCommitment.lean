@@ -154,9 +154,8 @@ variable {E T}
 
 /-- **Canonical deviations suffice**: a valid play offering exit, with a best-responding
 agent, is matched by its canonical version. That version starts from the same prior, is valid,
-offers exit, is best-responded (truthfully, `canonical_truthful`) and gives both players the
-same values. So the principal's sequential rationality need only be checked against canonical
-mechanisms. -/
+offers exit, is best-responded (truthfully, `AnyPlay.canonical_truthful`) and gives both
+players the same values. -/
 theorem AnyPlay.canonical_spec {Q : AnyPlay Θ X} {V : (Θ → ℝ) → ℝ} {W : Θ → (Θ → ℝ) → ℝ}
     (hQ : Q.play.Valid) (hx : Q.OffersExit E) (hbr : Q.play.BestResponds E W) :
     Q.canonical.play.μ = Q.play.μ ∧ Q.canonical.play.Valid ∧ Q.canonical.OffersExit E ∧
@@ -165,6 +164,20 @@ theorem AnyPlay.canonical_spec {Q : AnyPlay Θ X} {V : (Θ → ℝ) → ℝ} {W 
       ∀ θ, Q.canonical.play.agentValue E W θ = Q.play.agentValue E W θ :=
   ⟨rfl, Play.toCanonical_valid hQ, Play.toCanonical_exit hx, Play.toCanonical_bestResponds hQ hbr,
     Play.toCanonical_principalValue hQ V, Play.toCanonical_agentValue hQ W⟩
+
+/-- **Sequential rationality need only be checked against canonical deviations**: if no
+admissible canonical play from `β` beats `v`, no admissible play does. -/
+theorem AnyPlay.le_of_canonical_le {β : Θ → ℝ} {v : ℝ} {V : (Θ → ℝ) → ℝ}
+    {W : Θ → (Θ → ℝ) → ℝ} (h : ∀ Q : AnyPlay Θ X, Q.play.μ = β → Q.play.Valid →
+      Q.OffersExit E → Q.play.BestResponds E W → Q.canonical.play.principalValue E V ≤ v)
+    (Q : AnyPlay Θ X) (hμ : Q.play.μ = β) (hQ : Q.play.Valid) (hx : Q.OffersExit E)
+    (hbr : Q.play.BestResponds E W) : Q.play.principalValue E V ≤ v :=
+  (canonical_spec hQ hx hbr).2.2.2.2.1 ▸ h Q hμ hQ hx hbr
+
+/-- In the canonical version of a play the agent reports truthfully. -/
+theorem AnyPlay.canonical_truthful (Q : AnyPlay Θ X) (θ : Θ) :
+    Q.canonical.play.σ θ (some θ) = 1 := by
+  simp [AnyPlay.canonical, Play.toCanonical]
 
 /-- **Canonical mechanisms are without loss under limited commitment** (Doval–Skreta 2022,
 Theorem 1, for belief-based assessments): the canonical version of an equilibrium is an
@@ -182,8 +195,8 @@ theorem canonical_isEquilibrium {A : Assessment Θ X} {V : ℕ → (Θ → ℝ) 
 
 /-- In the canonical assessment the agent reports truthfully. -/
 theorem canonical_truthful (A : Assessment Θ X) (t : ℕ) (β : Θ → ℝ) (θ : Θ) :
-    (A.canonical t β).play.σ θ (some θ) = 1 := by
-  simp [Assessment.canonical, AnyPlay.canonical, Play.toCanonical]
+    (A.canonical t β).play.σ θ (some θ) = 1 :=
+  (A t β).canonical_truthful θ
 
 /-- **Exit protects the agent**: in equilibrium, with `k` periods to go, each type gets at
 least `k` times its outside flow payoff plus a lower bound `c` on its terminal values. -/

@@ -17,7 +17,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | Uniqueness of the ironing a.e. | `Ironing.lean` | `Ironing.Ironed.ae_eq` |
 | **Bulow–Roberts (1989)**: the hull is the concave hull of the revenue curve | `RevenueCurve.lean` | `Ironing.hull_eq_concaveHull`, `fslope_hull_eq_slope` |
 | **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible`, `toCanonical_IC`, `toCanonical_exit` |
-| **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `outside_le_agentValue` |
+| **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `AnyPlay.le_of_canonical_le`, `outside_le_agentValue` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 
@@ -116,7 +116,8 @@ persistent private type. Each mechanism has an exit message giving the outside a
   truthfully (`canonical_truthful`) and announced beliefs are the principal's posteriors.
 * **Canonical deviations suffice** (`AnyPlay.canonical_spec`). Every admissible deviation is
   matched by its canonical version, which is admissible too and gives both players the same
-  values. So sequential rationality need only be checked against canonical mechanisms.
+  values. So sequential rationality need only be checked against canonical mechanisms
+  (`AnyPlay.le_of_canonical_le`).
 * **Exit protects the agent** (`outside_le_agentValue`). With k periods to go, each type gets
   at least k times its outside flow payoff, plus a lower bound on its terminal values.
 
