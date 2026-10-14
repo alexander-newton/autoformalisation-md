@@ -19,11 +19,10 @@ Its Lagrangian dual, with obedience multipliers `y ≥ 0`, prices each state at
 * `weak_duality`: every obedient scheme earns at most `∑ μ θ p_y θ`;
 * `exists_optimal`: an optimal obedient scheme exists;
 * `strong_duality`, `value_eq_iInf`: the optimal value equals `inf_{y ≥ 0} ∑ μ θ p_y θ`;
-* `price_isDKPrice`: each `p_y` is feasible for the Dworczak–Kolotilin dual, i.e. it prices
-  every belief `ν` above the sender's payoff from any receiver-optimal action at `ν`.
-
-So the value of persuasion is the least expected cost of such state prices, as in
-Dworczak–Kolotilin's persuasion duality, restricted here to prices of the form `p_y`.
+* `price_isDKPrice`: each `p_y` is a Dworczak–Kolotilin price, i.e. it prices every belief `ν`
+  above the sender's payoff from any receiver-optimal action at `ν`;
+* `dk_weak`, `value_eq_iInf_DK`: **the persuasion duality** in the finite case. Every DK price
+  bounds the value, and the value is the least expected cost of a DK price.
 -/
 
 open Finset ContinuousLinearMap
@@ -173,6 +172,45 @@ theorem price_isDKPrice {y : A × A → ℝ} (hy : 0 ≤ y) {ν : Θ → ℝ} (h
         linarith
     _ ≤ _ := sum_le_sum fun θ _ =>
         mul_le_mul_of_nonneg_left (le_sup' (lag v w y · θ) (mem_univ a)) (hν θ)
+
+variable (v w) in
+/-- `p` is a **Dworczak–Kolotilin price**: it prices every belief `ν` above the sender's payoff
+from any action that is optimal for the receiver at `ν`. -/
+def IsDKPrice (p : Θ → ℝ) : Prop :=
+  ∀ ν : Θ → ℝ, 0 ≤ ν → ∀ a, (∀ a', ∑ θ, ν θ * w a' θ ≤ ∑ θ, ν θ * w a θ) →
+    ∑ θ, ν θ * v a θ ≤ ∑ θ, ν θ * p θ
+
+/-- **Weak duality for every DK price**: no obedient scheme earns more than the expected price. -/
+theorem dk_weak {x : A × Θ → ℝ} (hx : x ∈ Schemes μ) (hob : Obedient w x) {p : Θ → ℝ}
+    (hp : IsDKPrice v w p) : obj v x ≤ ∑ θ, μ θ * p θ := by
+  -- recommendation `a` induces the (unnormalised) belief `x (a, ·)`, at which `a` is optimal
+  have h : ∀ a, ∑ θ, x (a, θ) * v a θ ≤ ∑ θ, x (a, θ) * p θ := fun a =>
+    hp (fun θ => x (a, θ)) (fun θ => hx.1 (a, θ)) a fun a' => by
+      have := hob (a, a')
+      rw [obed_apply] at this
+      simp only [mul_sub, sum_sub_distrib] at this
+      linarith
+  calc obj v x ≤ ∑ a, ∑ θ, x (a, θ) * p θ := by
+        rw [obj_apply]; exact sum_le_sum fun a _ => h a
+    _ = ∑ θ, μ θ * p θ := by
+        rw [sum_comm]; exact sum_congr rfl fun θ _ => by rw [← sum_mul, hx.2 θ]
+
+/-- **The persuasion duality** (Dworczak–Kolotilin, finite case): the value of persuasion is
+the least expected cost of a Dworczak–Kolotilin price. -/
+theorem value_eq_iInf_DK {xs : A × Θ → ℝ} (hxs : xs ∈ Schemes μ) (hob : Obedient w xs)
+    (hopt : ∀ x ∈ Schemes μ, Obedient w x → obj v x ≤ obj v xs) :
+    obj v xs = ⨅ p : {p : Θ → ℝ // IsDKPrice v w p}, ∑ θ, μ θ * p.1 θ := by
+  have hDK : ∀ {y : A × A → ℝ}, 0 ≤ y → IsDKPrice v w (price v w y) :=
+    fun hy ν hν a ha => price_isDKPrice hy hν ha
+  have : Nonempty {p : Θ → ℝ // IsDKPrice v w p} := ⟨⟨_, hDK (le_refl 0)⟩⟩
+  have hbdd : BddBelow (Set.range fun p : {p : Θ → ℝ // IsDKPrice v w p} =>
+      ∑ θ, μ θ * p.1 θ) :=
+    ⟨obj v xs, by rintro _ ⟨p, rfl⟩; exact dk_weak hxs hob p.2⟩
+  refine le_antisymm (le_ciInf fun p => dk_weak hxs hob p.2)
+    (le_of_forall_pos_le_add fun ε hε => ?_)
+  -- the state prices `p_y` from Lagrangian strong duality are DK prices
+  obtain ⟨y, hy, h⟩ := strong_duality hxs hob hopt hε
+  exact (ciInf_le hbdd ⟨_, hDK hy⟩).trans h
 
 /-- **Value of persuasion = least expected state price** (no duality gap, as an equality). -/
 theorem value_eq_iInf {xs : A × Θ → ℝ} (hxs : xs ∈ Schemes μ) (hob : Obedient w xs)

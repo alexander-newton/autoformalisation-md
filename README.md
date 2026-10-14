@@ -11,11 +11,11 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 |---|---|---|
 | **Myerson (1981)**: Myerson's lemma, revenue equivalence | `Myerson.lean` | `Myerson.Mech.IC_iff`, `Mech.IC.envelope`, `Mech.revenue_equivalence` |
 | Revenue = virtual surplus; posted price optimal under regularity | `Myerson.lean` | `Myerson.revenue_eq_virtualSurplus`, `revenue_le`, `postedPrice_optimal` |
-| **Riley–Zeckhauser (1983)**: posted prices optimal for any distribution | `Ironing.lean` | `Ironing.exists_postedPrice_optimal`, `revenue_postedPrice` |
+| **Riley–Zeckhauser (1983)**: posted prices optimal for any continuous density | `Ironing.lean` | `Ironing.exists_postedPrice_optimal`, `revenue_postedPrice` |
 | **Myerson (1981)**: optimal auction, n bidders, with **ironing** | `Ironing.lean`, `Auction.lean` | `Auction.ironed_optimal`, `Auction.myerson_optimal`, `Mechanism.revenue_le` |
 | **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
-| **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf`, `strong_duality`, `price_isDKPrice` |
+| **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 
 ## What is formalised
 
@@ -32,7 +32,7 @@ A single buyer has a value θ ∈ [a, b] and quasilinear utility θq − t.
 ### Ironing
 * **The key identity.** A nondecreasing allocation Q : [a, b] → [0, 1] is an *average of
   threshold rules*: ∫ₐᵇ Q g = ∫₀¹ (∫ from p(s) to b of g) ds (`integral_mul_eq_threshold`).
-* **One buyer, any distribution (Riley–Zeckhauser).** Each tail ∫ₚᵇ J is the revenue
+* **One buyer, any continuous density (Riley–Zeckhauser).** Each tail ∫ₚᵇ J is the revenue
   p(1 − F(p)) of the posted price p (`revenue_postedPrice`). So some posted price beats every
   IC, IR mechanism (`exists_postedPrice_optimal`), with no regularity assumption.
 * **n bidders (Myerson §6).** A score φ̄ *irons* the virtual value when:
@@ -40,7 +40,8 @@ A single buyer has a value θ ∈ [a, b] and quasilinear utility θq − t.
   * the gap D(p) = ∫ₐᵖ (J − φ̄ f) is ≥ 0 and vanishes at b;
   * φ̄ is flat wherever D > 0 (`Ironed`).
 
-  For any monotone allocation the gap term ∫ Q (J − φ̄ f) is ≤ 0 (`gapTerm_nonpos`). It is
+  For any monotone allocation Q with values in [0, 1], the gap term ∫ Q (J − φ̄ f) is ≤ 0
+  (`gapTerm_nonpos`). It is
   exactly 0 when the allocation depends on the type only through φ̄ (`gapTerm_eq_zero`):
   a threshold never lies inside an ironing interval.
 * **The ironed auction is optimal** (`ironed_optimal`). The highest nonnegative ironed virtual
@@ -68,7 +69,9 @@ finite types, messages and allocations.
     payoff is unchanged (`canonical_outcome_eq`);
   * is self-consistent: announcing β induces posterior β (`canonical_posterior`);
   * is Bayes plausible (`canonical_bayesPlausible`).
-* **On-path posteriors are beliefs** (`post_isDist`).
+* **On-path posteriors are beliefs** (`post_isDist`): every outcome with positive total
+  probability induces a probability vector. An outcome reached only by zero-prior types
+  induces the junk "belief" 0; a full-support prior rules this out.
 
 ### Persuasion as a linear program
 With finitely many states and actions, Bayesian persuasion is a linear program over obedient
@@ -76,9 +79,11 @@ recommendation schemes. Its Lagrangian dual, with obedience multipliers y ≥ 0,
 state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * **Duality.** We prove weak duality, existence of an optimal scheme, and no duality gap:
   value = inf_{y≥0} Σ μ(θ) p_y(θ) (`value_eq_iInf`).
-* **Link to Dworczak–Kolotilin** (`price_isDKPrice`). Each p_y is a feasible
-  Dworczak–Kolotilin price. For every belief ν and every receiver-optimal action a at ν,
-  Σ ν(θ) p_y(θ) ≥ Σ ν(θ) v(a,θ).
+* **The persuasion duality, finite case** (`value_eq_iInf_DK`). A Dworczak–Kolotilin price p
+  satisfies Σ ν(θ) p(θ) ≥ Σ ν(θ) v(a,θ) for every belief ν and every receiver-optimal action
+  a at ν. The value of persuasion equals the least expected cost of such a price.
+  * Every DK price bounds the value (`dk_weak`).
+  * The state prices p_y are DK prices (`price_isDKPrice`), and they close the gap.
 * **Engine.** Strong duality comes from `Duality.strong_duality`, a Hahn–Banach separation
   for linear programs over compact convex sets.
 
@@ -94,8 +99,8 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * **Clamped virtual values.** Virtual values are evaluated at the type clamped into [a, b].
   Types lie in [a, b] almost surely, so this is harmless.
 * **Ironing is assumed, not constructed.** `ironed_optimal` takes an ironing φ̄ as a
-  hypothesis (`Ironed`). Existence of the ironing, via the convex hull of the revenue curve
-  in quantile space, is not yet formalised. In the regular case it is proved
+  hypothesis (`Ironed`). Existence of the ironing, via the concave hull of the revenue
+  curve (equivalently the convex hull of H(q) = ∫₀^q φ(F⁻¹(r)) dr), is not yet formalised. In the regular case it is proved
   (`ironed_virtualValue`).
 * **Doval–Skreta is the one-shot step only.** Sequential rationality, participation and
   multiple periods are not modelled. Instead, the continuation is assumed to depend on the
@@ -127,6 +132,6 @@ lake build
 Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
-* Existence of ironings: the convex hull of the revenue curve.
+* Existence of ironings: the concave hull of the revenue curve.
 * The multi-period Doval–Skreta model and the Coasian dynamics.
 * Continuous-state persuasion duality (Dworczak–Kolotilin), using convex price functions.

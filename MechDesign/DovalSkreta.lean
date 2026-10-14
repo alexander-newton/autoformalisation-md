@@ -68,7 +68,8 @@ namespace Play
 
 variable (P : Play Θ M S X)
 
-/-- All the probabilities involved are probabilities. -/
+/-- All the probabilities involved are probabilities. (Normalisation of the prior is not
+used by the proofs; it is part of what a play means.) -/
 structure Valid : Prop where
   μ : IsDist P.μ
   ζ : ∀ m, IsDist (P.ζ m)

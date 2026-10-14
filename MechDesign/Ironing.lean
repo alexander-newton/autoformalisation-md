@@ -9,7 +9,7 @@ import Mathlib.MeasureTheory.Integral.Prod
 
 Myerson's treatment of non-regular distributions rests on one observation: a nondecreasing
 allocation rule `Q : [a, b] → [0, 1]` is an average of *threshold* rules. Writing
-`p(s)` for the type at which `Q` first reaches level `s`,
+`p(s)` for the infimum of the types at which `Q` reaches level `s` (its *threshold*),
 
   `∫ₐᵇ Q g = ∫₀¹ (∫_{p(s)}^b g) ds`        (`integral_mul_eq_threshold`).
 
@@ -22,7 +22,8 @@ namespace Ironing
 
 variable {a b s θ : ℝ} {Q g : ℝ → ℝ}
 
-/-- The **threshold** at which `Q` first reaches level `s` on `[a, b]` (or `b` if never). -/
+/-- The **threshold** of level `s`: the infimum of the types in `[a, b]` at which `Q ≥ s`
+(`b` if there are none). -/
 noncomputable def threshold (Q : ℝ → ℝ) (a b s : ℝ) : ℝ :=
   sInf (insert b {θ | θ ∈ Icc a b ∧ s ≤ Q θ})
 
@@ -207,7 +208,7 @@ lemma tail_J_eq {p : ℝ} (hp : p ∈ Icc a b) (hf : ContinuousOn f (Icc a b))
       ((J_continuousOn hab hf).mono (by rw [uIcc_of_le hab]))]
   rfl
 
-/-- **Posted prices are optimal for any distribution** (Riley–Zeckhauser 1983; the
+/-- **Posted prices are optimal for any continuous density** (Riley–Zeckhauser 1983; the
 one-buyer case of Myerson's ironing). Some posted price earns at least as much as every
 IC, IR mechanism. Proof: an IC allocation is an average of threshold rules, and each
 threshold rule earns at most the best posted price. -/
@@ -240,7 +241,8 @@ noncomputable def gap (f : ℝ → ℝ) (a : ℝ) (φ : ℝ → ℝ) (p : ℝ) :
 
 /-- `φ` **irons** the virtual value of the density `f` on `[a, b]`: it is monotone, the gap is
 nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. (This is the
-derivative of the convex hull of the revenue curve; when the virtual value is itself monotone,
+derivative of the convex hull of `H(q) = ∫₀^q φ(F⁻¹ r) dr`, i.e. of the concave hull of the
+revenue curve, read in type space; when the virtual value is itself monotone,
 it irons itself with zero gap: `ironed_virtualValue`.) -/
 structure Ironed (f : ℝ → ℝ) (a b : ℝ) (φ : ℝ → ℝ) : Prop where
   mono : Monotone φ
@@ -374,8 +376,8 @@ theorem ironed_optimal (P : Prior ν f a b) {φ : ι → ℝ → ℝ}
 /-! ### The regular case -/
 
 /-- Under regularity the virtual value irons itself, with zero gap. -/
-lemma ironed_virtualValue (P : Prior ν f a b)
-    (hreg : ∀ i, MonotoneOn (virtualValue (f i) a b) (Icc a b)) (i : ι) :
+lemma ironed_virtualValue (P : Prior ν f a b) (i : ι)
+    (hreg : MonotoneOn (virtualValue (f i) a b) (Icc a b)) :
     Ironed (f i) a b (virtualValue (f i) a b) := by
   have hab := P.hab
   -- on `[a, b]` the virtual value is `J / f`, so the gap integrand vanishes
@@ -386,7 +388,7 @@ lemma ironed_virtualValue (P : Prior ν f a b)
       simp [J_eq_virtualValue_mul hθ' (P.pos i θ hθ').ne']).trans intervalIntegral.integral_zero
   have hJ : ContinuousOn (Myerson.J (f i) a) (Icc a b) := by
     simpa [uIcc_of_le hab] using Myerson.J_continuousOn hab (P.cont i).continuousOn
-  refine ⟨virtualValue_monotone hab (hreg i), P.virtualValue_bddMeas' i,
+  refine ⟨virtualValue_monotone hab hreg, P.virtualValue_bddMeas' i,
     (hJ.div (P.cont i).continuousOn fun θ hθ => (P.pos i θ hθ).ne').congr fun θ hθ => ?_,
     fun p hp => (hgap p hp).ge, hgap b ⟨hab, le_rfl⟩, fun p hp hpos => ?_⟩
   · simp [virtualValue, min_eq_left hθ.2, max_eq_right hθ.1]
@@ -406,6 +408,6 @@ theorem myerson_optimal (P : Prior ν f a b)
       (myersonAuction a b f).BIC ν a b ∧ (∀ i, ((myersonAuction a b f).interim ν i).IR a b) ∧
       ∀ M : Mechanism ι, M.BddMeasurable → M.Feasible → M.BIC ν a b →
         (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ (myersonAuction a b f).revenue ν :=
-  ironed_optimal P (ironed_virtualValue P hreg)
+  ironed_optimal P fun i => ironed_virtualValue P i (hreg i)
 
 end Auction
