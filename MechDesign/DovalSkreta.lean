@@ -70,7 +70,7 @@ variable (P : Play Θ M S X)
 
 /-- All the probabilities involved are probabilities. -/
 structure Valid : Prop where
-  μ : ∀ θ, 0 ≤ P.μ θ
+  μ : IsDist P.μ
   ζ : ∀ m, IsDist (P.ζ m)
   σ : ∀ θ, IsDist (P.σ θ)
 
@@ -156,11 +156,19 @@ theorem canonical_posterior (hP : P.Valid) (θ : Θ) (b : (Θ → ℝ) × X) :
   rw [← hb, ← mul_sum]
   change P.joint θ o = P.joint θ o / (∑ θ', P.joint θ' o) * ∑ θ', P.joint θ' o
   have hj : ∀ θ, 0 ≤ P.joint θ o := fun θ =>
-    mul_nonneg (hP.μ θ) (sum_nonneg fun m _ => mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o))
+    mul_nonneg (hP.μ.1 θ) (sum_nonneg fun m _ => mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o))
   rcases (sum_nonneg fun θ _ => hj θ).eq_or_lt with h | h
   · rw [← h, mul_zero]
     exact (sum_eq_zero_iff_of_nonneg fun θ _ => hj θ).1 h.symm θ (mem_univ θ)
   · rw [div_mul_cancel₀ _ h.ne']
+
+/-- On path the principal's posterior is a genuine belief. (Off path, where the outcome has
+probability zero, `post` is the junk value `0`.) -/
+theorem post_isDist (hP : P.Valid) {o : S × X} (ho : 0 < ∑ θ, P.joint θ o) :
+    IsDist (P.post o) := by
+  refine ⟨fun θ => div_nonneg (mul_nonneg (hP.μ.1 θ) (sum_nonneg fun m _ =>
+    mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o))) ho.le, ?_⟩
+  simp only [post]; rw [← sum_div, div_self ho.ne']
 
 /-- **Bayes plausibility**: the canonical posteriors average back to the prior. -/
 theorem canonical_bayesPlausible (hP : P.Valid) (θ : Θ) :

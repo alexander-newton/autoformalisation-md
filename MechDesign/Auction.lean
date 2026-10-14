@@ -92,6 +92,12 @@ lemma BddMeas.mul {α : Type*} [MeasurableSpace α] {g h : α → ℝ} (hg : Bdd
 lemma BddMeas.comp_eval {g : ℝ → ℝ} (hg : BddMeas g) (i : ι) : BddMeas fun θ : ι → ℝ => g (θ i) :=
   ⟨hg.1.comp (measurable_pi_apply i), hg.2.imp fun _ hC θ => hC (θ i)⟩
 
+lemma BddMeas.intervalIntegrable {g : ℝ → ℝ} (hg : BddMeas g) (a b : ℝ) :
+    IntervalIntegrable g volume a b := by
+  obtain ⟨C, hC⟩ := hg.2
+  refine ⟨?_, ?_⟩ <;> exact .of_bound measure_Ioc_lt_top hg.1.aestronglyMeasurable C
+    (ae_of_all _ fun x => by simpa using hC x)
+
 /-- Averaging out the other bidders preserves bounded measurability. -/
 lemma BddMeas.interim {g : (ι → ℝ) → ℝ} (hg : BddMeas g) (i : ι) :
     BddMeas fun s => ∫ θ, g (update θ i s) ∂Measure.pi ν := by
@@ -116,7 +122,7 @@ namespace Mechanism
 variable {ν} (M : Mechanism ι)
 
 /-- Allocations and payments are bounded and measurable. -/
-def Regular : Prop := ∀ i, BddMeas (M.q i) ∧ BddMeas (M.t i)
+def BddMeasurable : Prop := ∀ i, BddMeas (M.q i) ∧ BddMeas (M.t i)
 
 /-- Feasibility: allocation probabilities are nonnegative and sum to at most one. -/
 def Feasible : Prop := ∀ θ, (∀ i, 0 ≤ M.q i θ) ∧ ∑ i, M.q i θ ≤ 1
@@ -214,15 +220,24 @@ namespace Mechanism
 
 variable {ν} {M : Mechanism ι}
 
-/-- **One bidder's payments = virtual surplus.** Resample bidder `i`, apply the one-bidder
-revenue formula to the interim mechanism, and resample back. -/
-lemma integral_payment_eq (P : Prior ν f a b) (hM : M.Regular) (i : ι)
-    (hIC : (M.interim ν i).IC a b) :
-    ∫ θ, M.t i θ ∂Measure.pi ν =
-      (∫ θ, M.q i θ * virtualValue (f i) a b (θ i) ∂Measure.pi ν) - (M.interim ν i).U a := by
-  have hφ := P.virtualValue_bddMeas' i
-  have hQφ : BddMeas fun x => (M.interim ν i).q x * virtualValue (f i) a b x :=
-    ((hM i).1.interim ν i).mul hφ
+/-- **One bidder's payments, against any score.** For any bounded measurable score `h`,
+`E[tᵢ] = E[qᵢ h(θᵢ)] + ∫ₐᵇ Qᵢ (Jᵢ - h fᵢ) - Uᵢ(a)`: resample bidder `i`, apply the
+one-bidder revenue formula to the interim mechanism, split off the score, resample back. -/
+lemma integral_payment_eq_score (P : Prior ν f a b) (hM : M.BddMeasurable) (i : ι)
+    (hIC : (M.interim ν i).IC a b) {h : ℝ → ℝ} (hh : BddMeas h) :
+    ∫ θ, M.t i θ ∂Measure.pi ν = (∫ θ, M.q i θ * h (θ i) ∂Measure.pi ν) +
+      (∫ x in a..b, (M.interim ν i).q x * (Myerson.J (f i) a x - h x * f i x)) -
+      (M.interim ν i).U a := by
+  have hQh : BddMeas fun x => (M.interim ν i).q x * h x := ((hM i).1.interim ν i).mul hh
+  have hfc := (P.cont i).continuousOn (s := uIcc a b)
+  have hQJ : IntervalIntegrable (fun x => (M.interim ν i).q x * Myerson.J (f i) a x) volume a b :=
+    ((uIcc_of_le P.hab ▸ hIC.monotoneOn).intervalIntegrable).mul_continuousOn
+      (Myerson.J_continuousOn P.hab (P.cont i).continuousOn)
+  have hQhf : IntervalIntegrable (fun x => (M.interim ν i).q x * h x * f i x) volume a b :=
+    (hQh.intervalIntegrable a b).mul_continuousOn hfc
+  have hgap : IntervalIntegrable
+      (fun x => (M.interim ν i).q x * (Myerson.J (f i) a x - h x * f i x)) volume a b := by
+    simpa [mul_sub, mul_assoc] using hQJ.sub hQhf
   calc ∫ θ, M.t i θ ∂Measure.pi ν
       = ∫ x in a..b, (M.interim ν i).t x * f i x := by
         rw [integral_resample ν i (hM i).2.integrable]
@@ -230,16 +245,25 @@ lemma integral_payment_eq (P : Prior ν f a b) (hM : M.Regular) (i : ι)
     _ = (∫ x in a..b, (M.interim ν i).q x * Myerson.J (f i) a x) - (M.interim ν i).U a :=
         Myerson.revenue_eq_virtualSurplus P.hab (P.cont i).continuousOn
           (P.integral_density i) hIC
-    _ = (∫ x in a..b, ((M.interim ν i).q x * virtualValue (f i) a b x) * f i x) -
+    -- split the virtual surplus into the score part and the gap
+    _ = (∫ x in a..b, (M.interim ν i).q x * h x * f i x) +
+          (∫ x in a..b, (M.interim ν i).q x * (Myerson.J (f i) a x - h x * f i x)) -
           (M.interim ν i).U a := by
-        congr 1
-        refine intervalIntegral.integral_congr fun x hx => ?_
-        rw [uIcc_of_le P.hab] at hx
-        rw [J_eq_virtualValue_mul hx (P.pos i x hx).ne', mul_assoc]
+        rw [← intervalIntegral.integral_add hQhf hgap]; congr 2; ext x; ring
     _ = _ := by
-        rw [← P.density i _ hQφ, integral_resample ν i (F := fun θ => M.q i θ *
-          virtualValue (f i) a b (θ i)) ((hM i).1.mul (hφ.comp_eval i)).integrable]
+        rw [← P.density i _ hQh, integral_resample ν i (F := fun θ => M.q i θ * h (θ i))
+          ((hM i).1.mul (hh.comp_eval i)).integrable]
         simp [interim, integral_mul_const]
+
+/-- **One bidder's payments = virtual surplus.** -/
+lemma integral_payment_eq (P : Prior ν f a b) (hM : M.BddMeasurable) (i : ι)
+    (hIC : (M.interim ν i).IC a b) :
+    ∫ θ, M.t i θ ∂Measure.pi ν =
+      (∫ θ, M.q i θ * virtualValue (f i) a b (θ i) ∂Measure.pi ν) - (M.interim ν i).U a := by
+  rw [integral_payment_eq_score P hM i hIC (P.virtualValue_bddMeas' i), add_eq_left.2]
+  refine (intervalIntegral.integral_congr fun x hx => ?_).trans intervalIntegral.integral_zero
+  rw [uIcc_of_le P.hab] at hx
+  simp [J_eq_virtualValue_mul hx (P.pos i x hx).ne']
 
 variable (ν) in
 /-- The auction is Bayesian incentive compatible. -/
@@ -247,7 +271,7 @@ def BIC (M : Mechanism ι) (a b : ℝ) : Prop := ∀ i, (M.interim ν i).IC a b
 
 /-- **Revenue = expected virtual surplus** (Myerson 1981):
 `E[revenue] = E[∑ᵢ qᵢ(θ) φᵢ(θᵢ)] - ∑ᵢ Uᵢ(a)`. -/
-theorem revenue_eq (P : Prior ν f a b) (hM : M.Regular) (hIC : M.BIC ν a b) :
+theorem revenue_eq (P : Prior ν f a b) (hM : M.BddMeasurable) (hIC : M.BIC ν a b) :
     M.revenue ν = (∫ θ, ∑ i, M.q i θ * virtualValue (f i) a b (θ i) ∂Measure.pi ν) -
       ∑ i, (M.interim ν i).U a := by
   have hqφ : ∀ i, BddMeas fun θ => M.q i θ * virtualValue (f i) a b (θ i) := fun i =>
@@ -256,39 +280,65 @@ theorem revenue_eq (P : Prior ν f a b) (hM : M.Regular) (hIC : M.BIC ν a b) :
     integral_finsetSum _ fun i _ => (hqφ i).integrable, ← sum_sub_distrib]
   exact sum_congr rfl fun i _ => integral_payment_eq P hM i (hIC i)
 
+/-- **Revenue against any scores**: `E[revenue] = E[∑ᵢ qᵢ hᵢ(θᵢ)] + ∑ᵢ ∫ₐᵇ Qᵢ (Jᵢ - hᵢ fᵢ)
+- ∑ᵢ Uᵢ(a)`. With `hᵢ` the virtual values the middle (gap) term vanishes. -/
+theorem revenue_eq_score (P : Prior ν f a b) (hM : M.BddMeasurable) (hIC : M.BIC ν a b)
+    {h : ι → ℝ → ℝ} (hh : ∀ i, BddMeas (h i)) :
+    M.revenue ν = (∫ θ, ∑ i, M.q i θ * h i (θ i) ∂Measure.pi ν) +
+      ∑ i, (∫ x in a..b, (M.interim ν i).q x * (Myerson.J (f i) a x - h i x * f i x)) -
+      ∑ i, (M.interim ν i).U a := by
+  rw [revenue, integral_finsetSum _ fun i _ => (hM i).2.integrable,
+    integral_finsetSum _ fun i _ => ((hM i).1.mul ((hh i).comp_eval i)).integrable,
+    ← sum_add_distrib, ← sum_sub_distrib]
+  exact sum_congr rfl fun i _ => integral_payment_eq_score P hM i (hIC i) (hh i)
+
+/-- A feasible auction's interim allocation probabilities lie in `[0, 1]`. -/
+lemma interim_q_mem (hM : M.BddMeasurable) (hF : M.Feasible) (i : ι) (x : ℝ) :
+    (M.interim ν i).q x ∈ Icc (0 : ℝ) 1 := by
+  refine ⟨integral_nonneg fun θ => (hF _).1 i, ?_⟩
+  calc (M.interim ν i).q x ≤ ∫ _, (1 : ℝ) ∂Measure.pi ν :=
+        integral_mono (BddMeas.integrable ⟨(hM i).1.1.comp (by fun_prop),
+          (hM i).1.2.imp fun _ h θ => h _⟩) (integrable_const 1) fun θ =>
+          (single_le_sum (fun j _ => (hF _).1 j) (mem_univ i)).trans (hF _).2
+    _ = 1 := by simp
+
 variable [Nonempty ι]
 
-variable (f a b) in
-/-- The best virtual value at a profile, or zero if all are negative. -/
-noncomputable def bestVirtual (θ : ι → ℝ) : ℝ :=
-  max 0 (univ.sup' univ_nonempty fun i => virtualValue (f i) a b (θ i))
+/-- The best nonnegative score at a profile (zero if all scores are negative). -/
+noncomputable def _root_.Auction.topScore (φ : ι → ℝ → ℝ) (θ : ι → ℝ) : ℝ :=
+  max 0 (univ.sup' univ_nonempty fun i => φ i (θ i))
 
-/-- A feasible allocation earns at most the best virtual value. -/
-lemma sum_le_bestVirtual (hM : M.Feasible) (θ : ι → ℝ) :
-    ∑ i, M.q i θ * virtualValue (f i) a b (θ i) ≤ bestVirtual a b f θ := by
+/-- A feasible allocation earns at most the best nonnegative score. -/
+lemma sum_le_topScore (hM : M.Feasible) (φ : ι → ℝ → ℝ) (θ : ι → ℝ) :
+    ∑ i, M.q i θ * φ i (θ i) ≤ topScore φ θ := by
   obtain ⟨h0, h1⟩ := hM θ
-  have hb : 0 ≤ bestVirtual a b f θ := le_max_left _ _
-  calc ∑ i, M.q i θ * virtualValue (f i) a b (θ i)
-      ≤ ∑ i, M.q i θ * bestVirtual a b f θ := sum_le_sum fun i _ =>
-        mul_le_mul_of_nonneg_left ((le_sup' (fun i => virtualValue (f i) a b (θ i))
+  have hb : 0 ≤ topScore φ θ := le_max_left _ _
+  calc ∑ i, M.q i θ * φ i (θ i)
+      ≤ ∑ i, M.q i θ * topScore φ θ := sum_le_sum fun i _ =>
+        mul_le_mul_of_nonneg_left ((le_sup' (fun i => φ i (θ i))
           (mem_univ i)).trans (le_max_right _ _)) (h0 i)
-    _ ≤ bestVirtual a b f θ := by rw [← sum_mul]; exact mul_le_of_le_one_left hb h1
+    _ ≤ topScore φ θ := by rw [← sum_mul]; exact mul_le_of_le_one_left hb h1
 
-lemma bestVirtual_bddMeas (P : Prior ν f a b) : BddMeas (bestVirtual a b f) := by
-  have h := fun i => (P.virtualValue_bddMeas' i).comp_eval (ι := ι) i
+lemma _root_.Auction.topScore_bddMeas {φ : ι → ℝ → ℝ} (hφ : ∀ i, BddMeas (φ i)) :
+    BddMeas (topScore φ) := by
+  have h := fun i => (hφ i).comp_eval (ι := ι) i
   choose C hC using fun i => (h i).2
   have hm := Finset.measurable_sup' univ_nonempty fun i (_ : i ∈ Finset.univ) => (h i).1
   refine ⟨measurable_const.max (by convert hm using 1; ext θ; simp [Finset.sup'_apply]),
     ∑ i, C i, fun θ => ?_⟩
   have hC0 : ∀ i, 0 ≤ C i := fun i => (abs_nonneg _).trans (hC i θ)
-  rw [abs_of_nonneg (le_max_left _ _)]
+  rw [topScore, abs_of_nonneg (le_max_left _ _)]
   refine max_le (sum_nonneg fun i _ => hC0 i) (sup'_le _ _ fun i _ => ?_)
   exact (le_abs_self _).trans ((hC i θ).trans
     (single_le_sum (fun j _ => hC0 j) (mem_univ i)))
 
-/-- **Myerson's bound**: a regular, feasible, BIC and interim-IR auction earns at most
+variable (f a b) in
+/-- The best virtual value at a profile, or zero if all are negative. -/
+noncomputable def bestVirtual : (ι → ℝ) → ℝ := topScore fun i => virtualValue (f i) a b
+
+/-- **Myerson's bound**: a bounded measurable, feasible, BIC and interim-IR auction earns at most
 `E[max(0, maxᵢ φᵢ(θᵢ))]`. -/
-theorem revenue_le (P : Prior ν f a b) (hM : M.Regular) (hF : M.Feasible)
+theorem revenue_le (P : Prior ν f a b) (hM : M.BddMeasurable) (hF : M.Feasible)
     (hIC : M.BIC ν a b) (hIR : ∀ i, (M.interim ν i).IR a b) :
     M.revenue ν ≤ ∫ θ, bestVirtual a b f θ ∂Measure.pi ν := by
   rw [revenue_eq P hM hIC]
@@ -296,8 +346,9 @@ theorem revenue_le (P : Prior ν f a b) (hM : M.Regular) (hF : M.Feasible)
     sum_nonneg fun i _ => hIR i a ⟨le_rfl, P.hab⟩
   have := integral_mono ((integrable_finsetSum _ fun i _ =>
     ((hM i).1.mul ((P.virtualValue_bddMeas' i).comp_eval i)).integrable))
-    ((bestVirtual_bddMeas P).integrable (μ := Measure.pi ν)) (sum_le_bestVirtual hF)
-  linarith
+    ((topScore_bddMeas fun i => P.virtualValue_bddMeas' i).integrable (μ := Measure.pi ν))
+    (sum_le_topScore hF _)
+  unfold bestVirtual; linarith
 
 /-! ### Dominant-strategy incentive compatibility implies BIC -/
 
@@ -305,14 +356,14 @@ theorem revenue_le (P : Prior ν f a b) (hM : M.Regular) (hF : M.Feasible)
 def slice (M : Mechanism ι) (i : ι) (θ : ι → ℝ) : Myerson.Mech :=
   ⟨fun s => M.q i (update θ i s), fun s => M.t i (update θ i s)⟩
 
-lemma slice_integrable (hM : M.Regular) (i : ι) (s' : ℝ) :
+lemma slice_integrable (hM : M.BddMeasurable) (i : ι) (s' : ℝ) :
     Integrable (fun θ => M.q i (update θ i s')) (Measure.pi ν) ∧
       Integrable (fun θ => M.t i (update θ i s')) (Measure.pi ν) :=
   ⟨BddMeas.integrable ⟨(hM i).1.1.comp (by fun_prop), (hM i).1.2.imp fun _ h θ => h _⟩,
    BddMeas.integrable ⟨(hM i).2.1.comp (by fun_prop), (hM i).2.2.imp fun _ h θ => h _⟩⟩
 
 /-- The interim utility of a report is the average of the ex-post ones. -/
-lemma interim_util (hM : M.Regular) (i : ι) (s s' : ℝ) :
+lemma interim_util (hM : M.BddMeasurable) (i : ι) (s s' : ℝ) :
     s * (M.interim ν i).q s' - (M.interim ν i).t s' =
       ∫ θ, s * (M.slice i θ).q s' - (M.slice i θ).t s' ∂Measure.pi ν := by
   obtain ⟨hq, ht⟩ := slice_integrable (ν := ν) hM i s'
@@ -321,7 +372,7 @@ lemma interim_util (hM : M.Regular) (i : ι) (s s' : ℝ) :
 
 /-- **DSIC ⇒ BIC**: if truth-telling is optimal against every profile of the others' types,
 it is optimal on average. -/
-lemma bic_of_dsic (hM : M.Regular) (h : ∀ i θ, (M.slice i θ).IC a b) : M.BIC ν a b := by
+lemma bic_of_dsic (hM : M.BddMeasurable) (h : ∀ i θ, (M.slice i θ).IC a b) : M.BIC ν a b := by
   intro i s hs s' hs'
   have int := fun s s' => let h := slice_integrable (ν := ν) hM i s'
     (h.1.const_mul s).sub h.2
@@ -330,7 +381,7 @@ lemma bic_of_dsic (hM : M.Regular) (h : ∀ i θ, (M.slice i θ).IC a b) : M.BIC
 
 /-- Likewise ex-post IR gives interim IR, and the interim utility of the lowest type is the
 average of the ex-post ones. -/
-lemma interim_U (hM : M.Regular) (i : ι) (s : ℝ) :
+lemma interim_U (hM : M.BddMeasurable) (i : ι) (s : ℝ) :
     (M.interim ν i).U s = ∫ θ, (M.slice i θ).U s ∂Measure.pi ν :=
   interim_util hM i s s
 
@@ -351,10 +402,6 @@ noncomputable def rank (i : ι) : ℕ := Fintype.equivFin ι i
 to the lower rank. -/
 def Wins (θ : ι → ℝ) (i : ι) : Prop :=
   0 ≤ φ i (θ i) ∧ ∀ j ≠ i, φ j (θ j) < φ i (θ i) ∨ (φ j (θ j) = φ i (θ i) ∧ rank i < rank j)
-
-/-- The best nonnegative score. -/
-noncomputable def topScore [Nonempty ι] (θ : ι → ℝ) : ℝ :=
-  max 0 (univ.sup' univ_nonempty fun i => φ i (θ i))
 
 /-- Clamp a report into `[a, b]`. -/
 def clamp (s : ℝ) : ℝ := max a (min s b)
@@ -511,9 +558,10 @@ lemma abs_area_le (i : ι) (θ : ι → ℝ) : |area φ a b i θ| ≤ 2 * (|a| +
   rw [Real.norm_eq_abs, one_mul, Real.volume_real_Ioc_of_le hac] at h
   rw [area]; linarith [hc.2, neg_abs_le a, abs_nonneg b]
 
-/-- The highest-score auction is regular: allocations and payments are bounded and
+/-- The highest-score auction has bounded measurable allocations and payments are bounded and
 measurable. -/
-lemma highestScore_regular (hφ : ∀ i, Measurable (φ i)) : (highestScore φ a b).Regular := by
+lemma highestScore_bddMeasurable (hφ : ∀ i, Measurable (φ i)) :
+    (highestScore φ a b).BddMeasurable := by
   intro i
   have hq : BddMeas fun θ => (highestScore φ a b).q i θ :=
     ⟨Measurable.ite (measurable_wins hφ i).setOf measurable_const measurable_const,
@@ -540,47 +588,24 @@ lemma virtualValue_monotone (hab : a ≤ b) {g : ℝ → ℝ}
 
 end HighestScore
 
-/-! ### Myerson's optimal auction -/
+/-! ### Highest-score auctions with monotone scores -/
 
-variable (f a b) in
-/-- **The Myerson auction**: highest nonnegative virtual value wins, at the threshold price. -/
-noncomputable def myersonAuction : Mechanism ι :=
-  highestScore (fun i => virtualValue (f i) a b) a b
+variable {ν} [Nonempty ι]
 
-variable [Nonempty ι] {ν}
-
-/-- **Myerson's optimal auction** (1981). Under regularity (virtual values nondecreasing),
-the auction that awards the item to the highest nonnegative virtual value, at the threshold
-price, is regular, feasible, BIC and interim IR, and earns at least as much as any other
-such auction. -/
-theorem myerson_optimal (P : Prior ν f a b)
-    (hreg : ∀ i, MonotoneOn (virtualValue (f i) a b) (Icc a b)) :
-    let A := myersonAuction a b f
-    A.Regular ∧ A.Feasible ∧ A.BIC ν a b ∧ (∀ i, (A.interim ν i).IR a b) ∧
-      ∀ M : Mechanism ι, M.Regular → M.Feasible → M.BIC ν a b →
-        (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ A.revenue ν := by
-  intro A
-  unfold A myersonAuction
-  set φ := fun i => virtualValue (f i) a b
-  have hmono i := virtualValue_monotone P.hab (hreg i)
-  have hA : (highestScore φ a b).Regular := highestScore_regular fun i =>
-    (P.virtualValue_bddMeas' i).1
-  -- dominant-strategy IC, hence BIC
-  have hIC : (highestScore φ a b).BIC ν a b :=
-    Mechanism.bic_of_dsic hA fun i θ => (highestScore_slice_IC_IR hmono i θ).1
-  -- ex-post IR, hence interim IR, and the lowest type gets nothing
-  have hU : ∀ i s, s ∈ Icc a b →
-      0 ≤ ((highestScore φ a b).interim ν i).U s ∧ ((highestScore φ a b).interim ν i).U a = 0 :=
-    fun i s hs => by
-    have ha : a ∈ Icc a b := ⟨le_rfl, P.hab⟩
-    rw [Mechanism.interim_U hA, Mechanism.interim_U hA]
-    refine ⟨integral_nonneg fun θ => (highestScore_slice_IC_IR hmono i θ).2 s hs, ?_⟩
-    simp [highestScore_slice_U ha]
-  -- its revenue is Myerson's bound
-  refine ⟨hA, highestScore_feasible, hIC, fun i s hs => (hU i s hs).1,
-    fun M hM hF hMIC hIR => (Mechanism.revenue_le P hM hF hMIC hIR).trans_eq ?_⟩
-  rw [Mechanism.revenue_eq P hA hIC, sum_eq_zero fun i _ => (hU i a ⟨le_rfl, P.hab⟩).2,
-    sub_zero]
-  exact integral_congr_ae (ae_of_all _ fun θ => (highestScore_sum θ).symm)
+/-- **A highest-score auction with monotone scores** is bounded measurable, feasible and
+BIC, interim IR, and leaves the lowest type no rent. (It is dominant-strategy IC slice by
+slice, and averaging gives BIC.) -/
+theorem highestScore_properties (hab : a ≤ b) {φ : ι → ℝ → ℝ} (hφ : ∀ i, BddMeas (φ i))
+    (hmono : ∀ i, Monotone (φ i)) :
+    (highestScore φ a b).BddMeasurable ∧ (highestScore φ a b).Feasible ∧
+      (highestScore φ a b).BIC ν a b ∧ (∀ i, ((highestScore φ a b).interim ν i).IR a b) ∧
+      ∀ i, ((highestScore φ a b).interim ν i).U a = 0 := by
+  have hA := highestScore_bddMeasurable (a := a) (b := b) fun i => (hφ i).1
+  refine ⟨hA, highestScore_feasible, Mechanism.bic_of_dsic hA fun i θ =>
+    (highestScore_slice_IC_IR hmono i θ).1, fun i s hs => ?_, fun i => ?_⟩
+  · rw [Mechanism.interim_U hA]
+    exact integral_nonneg fun θ => (highestScore_slice_IC_IR hmono i θ).2 s hs
+  · rw [Mechanism.interim_U hA]
+    simp [highestScore_slice_U ⟨le_rfl, hab⟩]
 
 end Auction

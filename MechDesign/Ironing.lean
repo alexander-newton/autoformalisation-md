@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026. Released under Apache 2.0 license.
 -/
-import MechDesign.Myerson
+import MechDesign.Auction
 import Mathlib.MeasureTheory.Integral.Prod
 
 /-!
@@ -229,4 +229,183 @@ theorem exists_postedPrice_optimal (hab : a ≤ b) (hf : ContinuousOn f (Icc a b
   have := integral_mul_le hab hIC.monotoneOn hq hJ fun p' hp' => hmax hp'
   linarith [hIR a ⟨le_rfl, hab⟩]
 
+/-! ### Ironed virtual values -/
+
+variable {f φ : ℝ → ℝ}
+
+/-- The **ironing gap** `D(p) = ∫ₐᵖ (J - φ f)` between the virtual surplus and the score
+`φ` (weighted by the density). -/
+noncomputable def gap (f : ℝ → ℝ) (a : ℝ) (φ : ℝ → ℝ) (p : ℝ) : ℝ :=
+  ∫ θ in a..p, J f a θ - φ θ * f θ
+
+/-- `φ` **irons** the virtual value of the density `f` on `[a, b]`: it is monotone, the gap is
+nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. (This is the
+derivative of the convex hull of the revenue curve; when the virtual value is itself monotone,
+it irons itself with zero gap: `ironed_virtualValue`.) -/
+structure Ironed (f : ℝ → ℝ) (a b : ℝ) (φ : ℝ → ℝ) : Prop where
+  mono : Monotone φ
+  bddMeas : Auction.BddMeas φ
+  cont : ContinuousOn φ (Icc a b)
+  gap_nonneg : ∀ p ∈ Icc a b, 0 ≤ gap f a φ p
+  gap_right : gap f a φ b = 0
+  flat : ∀ p ∈ Ioo a b, 0 < gap f a φ p → ∃ ε > 0, ∀ x ∈ Ioo (p - ε) (p + ε), φ x = φ p
+
+lemma gap_integrand_continuousOn (hab : a ≤ b) (hI : Ironed f a b φ)
+    (hf : ContinuousOn f (Icc a b)) : ContinuousOn (fun θ => J f a θ - φ θ * f θ) (Icc a b) := by
+  have hJ : ContinuousOn (J f a) (Icc a b) := by simpa [uIcc_of_le hab] using J_continuousOn hab hf
+  exact hJ.sub (hI.cont.mul hf)
+
+/-- The tail of the gap integrand is minus the gap. -/
+lemma tail_gap (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b)) {p : ℝ}
+    (hp : p ∈ Icc a b) : ∫ θ in p..b, (J f a θ - φ θ * f θ) = -gap f a φ p := by
+  have hab := hp.1.trans hp.2
+  have hg := gap_integrand_continuousOn hab hI hf
+  have hi : ∀ x ∈ Icc a b, IntervalIntegrable (fun θ => J f a θ - φ θ * f θ) volume a x :=
+    fun x hx => (hg.mono (by rw [uIcc_of_le hx.1]; exact Icc_subset_Icc_right hx.2))
+      |>.intervalIntegrable
+  rw [← integral_interval_sub_left (hi b ⟨hab, le_rfl⟩) (hi p hp)]
+  simp [gap, ← hI.gap_right]
+
+/-- **Ironing only costs revenue**: for a monotone allocation, `∫ Q (J - φ f) ≤ 0`. -/
+lemma gapTerm_nonpos (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b))
+    (hQ : MonotoneOn Q (Icc a b)) (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) :
+    ∫ θ in a..b, Q θ * (J f a θ - φ θ * f θ) ≤ 0 :=
+  integral_mul_le hab hQ h01 (gap_integrand_continuousOn hab hI hf) fun p hp => by
+    rw [tail_gap hI hf hp]; linarith [hI.gap_nonneg p hp]
+
+/-- **Complementary slackness**: if `Q` depends on the type only through `φ`, the gap costs
+nothing, because no threshold of `Q` lies inside an ironing interval. -/
+lemma gapTerm_eq_zero (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b))
+    (hQ : MonotoneOn Q (Icc a b)) (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1)
+    (hfac : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, φ x = φ y → Q x = Q y) :
+    ∫ θ in a..b, Q θ * (J f a θ - φ θ * f θ) = 0 := by
+  rw [integral_mul_eq_threshold hab hQ h01 (gap_integrand_continuousOn hab hI hf)]
+  refine (integral_congr_ae (g := fun _ => 0) (ae_of_all _ fun s hs => ?_)).trans (by simp)
+  rw [uIoc_of_le zero_le_one] at hs
+  have hp := threshold_mem (Q := Q) (s := s) hab
+  set p := threshold Q a b s
+  rw [tail_gap hI hf hp, neg_eq_zero]
+  by_contra hne
+  have hpos : 0 < gap f a φ p := (hI.gap_nonneg p hp).lt_of_ne (Ne.symm hne)
+  have hap : a < p := hp.1.lt_of_ne fun h => by simp [← h, gap] at hpos
+  have hpb : p < b := hp.2.lt_of_ne fun h => by rw [h, hI.gap_right] at hpos; exact hpos.false
+  obtain ⟨ε, hε, hflat⟩ := hI.flat p ⟨hap, hpb⟩ hpos
+  -- `φ` is flat around the threshold, so `Q` is too: a point just above it has reached level
+  -- `s`, hence so has a point just below it, which contradicts the threshold's minimality
+  set y := min (p + ε / 2) b
+  set z := max (p - ε / 2) ((a + p) / 2)
+  have hy : y ∈ Icc a b := ⟨by simp [y]; constructor <;> linarith, min_le_right _ _⟩
+  have hz : z ∈ Icc a b := ⟨le_max_of_le_right (by linarith), max_le (by linarith) (by linarith)⟩
+  have hpy : p < y := lt_min (by linarith) hpb
+  have hzp : z < p := max_lt (by linarith) (by linarith)
+  have hyε : y ∈ Ioo (p - ε) (p + ε) := ⟨by linarith, by simp [y]; left; linarith⟩
+  have hzε : z ∈ Ioo (p - ε) (p + ε) := ⟨by simp [z]; left; linarith, by linarith⟩
+  have hQyz : Q y = Q z := hfac y hy z hz (by rw [hflat y hyε, hflat z hzε])
+  have hsz : s ≤ Q z := hQyz ▸ le_of_threshold_lt hQ hy hpy
+  exact absurd (threshold_le hz hsz) (not_le.2 hzp)
+
 end Ironing
+
+/-! ### The ironed Myerson auction -/
+
+namespace Auction
+
+open Ironing Function Finset
+open scoped Classical
+
+set_option linter.unusedSectionVars false
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι] [Nonempty ι] {ν : ι → Measure ℝ}
+  [∀ i, IsProbabilityMeasure (ν i)] {a b : ℝ} {f : ι → ℝ → ℝ}
+
+lemma wins_congr {φ : ι → ℝ → ℝ} {θ θ' : ι → ℝ} (h : ∀ j, φ j (θ j) = φ j (θ' j)) (i : ι) :
+    Wins φ θ i ↔ Wins φ θ' i := by
+  simp only [Wins, h]
+
+/-- In a highest-score auction, a bidder's interim allocation depends on its type only
+through its score. -/
+lemma highestScore_interim_congr {φ : ι → ℝ → ℝ} (i : ι) {x y : ℝ} (h : φ i x = φ i y) :
+    ((highestScore φ a b).interim ν i).q x = ((highestScore φ a b).interim ν i).q y := by
+  refine integral_congr_ae (ae_of_all _ fun θ => ?_)
+  have : Wins φ (update θ i x) i ↔ Wins φ (update θ i y) i := wins_congr (fun j => by
+    by_cases hj : j = i
+    · subst hj; simp [h]
+    · simp [hj]) i
+  simp only [highestScore, this]
+
+variable (a b) in
+/-- **The ironed Myerson auction**: the highest nonnegative ironed virtual value wins, at the
+threshold price. -/
+noncomputable def ironedAuction (φ : ι → ℝ → ℝ) : Mechanism ι := highestScore φ a b
+
+/-- **Myerson's optimal auction, general case** (Myerson 1981, §6). If `φ i` irons bidder
+`i`'s virtual value, the ironed auction is bounded measurable, feasible, BIC and interim IR,
+and earns at least as much as any other such auction. -/
+theorem ironed_optimal (P : Prior ν f a b) {φ : ι → ℝ → ℝ}
+    (hI : ∀ i, Ironed (f i) a b (φ i)) :
+    (ironedAuction a b φ).BddMeasurable ∧ (ironedAuction a b φ).Feasible ∧
+      (ironedAuction a b φ).BIC ν a b ∧ (∀ i, ((ironedAuction a b φ).interim ν i).IR a b) ∧
+      ∀ M : Mechanism ι, M.BddMeasurable → M.Feasible → M.BIC ν a b →
+        (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ (ironedAuction a b φ).revenue ν := by
+  have hφ i := (hI i).bddMeas
+  obtain ⟨hA, hAF, hAIC, hAIR, hAU⟩ :=
+    highestScore_properties (ν := ν) P.hab hφ fun i => (hI i).mono
+  refine ⟨hA, hAF, hAIC, hAIR, fun M hM hF hIC hIR => ?_⟩
+  -- any auction: the ironing gap only costs revenue, and the score surplus is at most the top
+  have hle : M.revenue ν ≤ ∫ θ, topScore φ θ ∂Measure.pi ν := by
+    rw [M.revenue_eq_score P hM hIC hφ]
+    have h₁ := sum_nonpos fun i (_ : i ∈ Finset.univ) => gapTerm_nonpos P.hab (hI i)
+      (P.cont i).continuousOn (hIC i).monotoneOn fun x _ => Mechanism.interim_q_mem hM hF i x
+    have h₂ := sum_nonneg fun i (_ : i ∈ Finset.univ) => hIR i a ⟨le_rfl, P.hab⟩
+    have h₃ := integral_mono (integrable_finsetSum _ fun i _ =>
+      ((hM i).1.mul ((hφ i).comp_eval i)).integrable)
+      ((topScore_bddMeas hφ).integrable (μ := Measure.pi ν)) (Mechanism.sum_le_topScore hF φ)
+    linarith
+  -- the ironed auction: the gap closes, no rent at the bottom, and it earns the top score
+  refine hle.trans_eq ?_
+  unfold ironedAuction
+  rw [Mechanism.revenue_eq_score P hA hAIC hφ, sum_eq_zero fun i _ => gapTerm_eq_zero P.hab
+      (hI i) (P.cont i).continuousOn (hAIC i).monotoneOn
+      (fun x _ => Mechanism.interim_q_mem hA hAF i x)
+      (fun x _ y _ h => highestScore_interim_congr i h),
+    sum_eq_zero fun i _ => hAU i, add_zero, sub_zero]
+  exact integral_congr_ae (ae_of_all _ fun θ => (highestScore_sum θ).symm)
+
+/-! ### The regular case -/
+
+/-- Under regularity the virtual value irons itself, with zero gap. -/
+lemma ironed_virtualValue (P : Prior ν f a b)
+    (hreg : ∀ i, MonotoneOn (virtualValue (f i) a b) (Icc a b)) (i : ι) :
+    Ironed (f i) a b (virtualValue (f i) a b) := by
+  have hab := P.hab
+  -- on `[a, b]` the virtual value is `J / f`, so the gap integrand vanishes
+  have hgap : ∀ p ∈ Icc a b, gap (f i) a (virtualValue (f i) a b) p = 0 := fun p hp =>
+    (intervalIntegral.integral_congr fun θ hθ => by
+      rw [uIcc_of_le hp.1] at hθ
+      have hθ' : θ ∈ Icc a b := ⟨hθ.1, hθ.2.trans hp.2⟩
+      simp [J_eq_virtualValue_mul hθ' (P.pos i θ hθ').ne']).trans intervalIntegral.integral_zero
+  have hJ : ContinuousOn (Myerson.J (f i) a) (Icc a b) := by
+    simpa [uIcc_of_le hab] using Myerson.J_continuousOn hab (P.cont i).continuousOn
+  refine ⟨virtualValue_monotone hab (hreg i), P.virtualValue_bddMeas' i,
+    (hJ.div (P.cont i).continuousOn fun θ hθ => (P.pos i θ hθ).ne').congr fun θ hθ => ?_,
+    fun p hp => (hgap p hp).ge, hgap b ⟨hab, le_rfl⟩, fun p hp hpos => ?_⟩
+  · simp [virtualValue, min_eq_left hθ.2, max_eq_right hθ.1]
+  · exact absurd (hgap p (Ioo_subset_Icc_self hp)) hpos.ne'
+
+variable (a b f) in
+/-- **The Myerson auction**: highest nonnegative virtual value wins, at the threshold price. -/
+noncomputable def myersonAuction : Mechanism ι :=
+  ironedAuction a b fun i => virtualValue (f i) a b
+
+/-- **Myerson's optimal auction, regular case** (1981). Under regularity (virtual values
+nondecreasing) no ironing is needed: the Myerson auction is bounded measurable, feasible, BIC
+and interim IR, and earns at least as much as any other such auction. -/
+theorem myerson_optimal (P : Prior ν f a b)
+    (hreg : ∀ i, MonotoneOn (virtualValue (f i) a b) (Icc a b)) :
+    (myersonAuction a b f).BddMeasurable ∧ (myersonAuction a b f).Feasible ∧
+      (myersonAuction a b f).BIC ν a b ∧ (∀ i, ((myersonAuction a b f).interim ν i).IR a b) ∧
+      ∀ M : Mechanism ι, M.BddMeasurable → M.Feasible → M.BIC ν a b →
+        (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ (myersonAuction a b f).revenue ν :=
+  ironed_optimal P (ironed_virtualValue P hreg)
+
+end Auction

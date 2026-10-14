@@ -42,6 +42,11 @@ When reviewing or re-passing any file, check the following.
 - Run `#print axioms` on the main theorems: only `propext`, `Classical.choice` and
   `Quot.sound`.
 - Is the README table updated when public names change?
+- **Red-team the statements.** After any new main theorem, have a separate agent audit that
+  each formal statement says what its docstring and the README claim. It should check that
+  the hypotheses are satisfiable (exhibit an instance in Lean), that definitions mean what
+  their names say, and that every restriction is disclosed under README "Scope". Fix or
+  disclose every finding before calling the work done.
 
 ## Build notes
 

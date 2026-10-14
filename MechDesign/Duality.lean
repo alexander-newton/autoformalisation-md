@@ -25,8 +25,8 @@ namespace Duality
 variable {E : Type*} [AddCommGroup E] [Module ℝ E] [TopologicalSpace E]
   {J : Type*} [Fintype J]
 
-/-- Weak duality: nonnegative multipliers only increase the objective on feasible points. -/
-theorem weak_duality (c : E →L[ℝ] ℝ) (g : J → E →L[ℝ] ℝ) {x : E} (hx : ∀ j, 0 ≤ g j x)
+/-- Nonnegative multipliers only increase the objective on feasible points. -/
+theorem le_lagrangian (c : E →L[ℝ] ℝ) (g : J → E →L[ℝ] ℝ) {x : E} (hx : ∀ j, 0 ≤ g j x)
     {y : J → ℝ} (hy : ∀ j, 0 ≤ y j) : c x ≤ c x + ∑ j, y j * g j x :=
   le_add_of_nonneg_right (Finset.sum_nonneg fun j _ => mul_nonneg (hy j) (hx j))
 

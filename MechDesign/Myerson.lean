@@ -140,10 +140,12 @@ theorem IC_iff : m.IC a b ↔
   · rw [hU x hx, hU y hy, add_sub_add_left_eq_sub]
     exact hq.supports_integral x hx y hy hxy
 
+/-- **Envelope formula**: an IC mechanism's utility is the area under its allocation. -/
 theorem IC.envelope (h : m.IC a b) {θ : ℝ} (hθ : θ ∈ Icc a b) :
     m.U θ = m.U a + ∫ s in a..θ, m.q s :=
   (IC_iff.1 h).2 θ hθ
 
+/-- An IC allocation is nondecreasing. -/
 theorem IC.monotoneOn (h : m.IC a b) : MonotoneOn m.q (Icc a b) :=
   (IC_iff_supports.1 h).monotoneOn
 

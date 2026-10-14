@@ -4,22 +4,26 @@ Copyright (c) 2026. Released under Apache 2.0 license.
 import MechDesign.Duality
 
 /-!
-# The persuasion duality (Kolotilin 2018; Dworczak–Kolotilin 2024), finite version
+# Persuasion as a linear program: duality with state prices (finite states and actions)
 
 A sender commits to an information structure; a receiver with utility `w a θ` takes an action.
 By the revelation principle the sender chooses a joint distribution `x (a, θ)` of
 recommended action and state with state-marginal equal to the prior `μ` and subject to
-*obedience*.  This is a linear program (Kolotilin 2018, "Optimal information disclosure: a
-linear programming approach").
+*obedience*. This is a finite linear program, in the spirit of Kolotilin (2018, "Optimal
+information disclosure: a linear programming approach"), whose setting (a continuum of states,
+a privately informed receiver with two actions) is different.
 
-Its dual assigns a **price** `p θ` to each state:
-`p_y θ = max_a [v a θ + ∑_{a'} y (a, a') (w a θ - w a' θ)]` for obedience multipliers `y ≥ 0`.
-We prove
+Its Lagrangian dual, with obedience multipliers `y ≥ 0`, prices each state at
+`p_y θ = max_a [v a θ + ∑_{a'} y (a, a') (w a θ - w a' θ)]`. We prove
 
 * `weak_duality`: every obedient scheme earns at most `∑ μ θ p_y θ`;
 * `exists_optimal`: an optimal obedient scheme exists;
-* `strong_duality`: the optimal value equals `inf_{y ≥ 0} ∑ μ θ p_y θ`
-  (no duality gap).
+* `strong_duality`, `value_eq_iInf`: the optimal value equals `inf_{y ≥ 0} ∑ μ θ p_y θ`;
+* `price_isDKPrice`: each `p_y` is feasible for the Dworczak–Kolotilin dual, i.e. it prices
+  every belief `ν` above the sender's payoff from any receiver-optimal action at `ν`.
+
+So the value of persuasion is the least expected cost of such state prices, as in
+Dworczak–Kolotilin's persuasion duality, restricted here to prices of the form `p_y`.
 -/
 
 open Finset ContinuousLinearMap
@@ -153,6 +157,34 @@ theorem strong_duality {xs : A × Θ → ℝ} (hxs : xs ∈ Schemes μ) (hob : O
   refine ⟨y, hy, ?_⟩
   have := hbound _ (pure_mem (prior_nonneg hxs) s)
   rwa [lagrangian_eq, sum_pure, ← sum_congr rfl fun θ _ => congrArg (μ θ * ·) (hs θ)] at this
+
+/-- **The dual prices are Dworczak–Kolotilin prices**: for every belief `ν` and every action
+`a` that is optimal for the receiver at `ν`, `∑ ν θ p_y θ ≥ ∑ ν θ v a θ`. -/
+theorem price_isDKPrice {y : A × A → ℝ} (hy : 0 ≤ y) {ν : Θ → ℝ} (hν : 0 ≤ ν) {a : A}
+    (ha : ∀ a', ∑ θ, ν θ * w a' θ ≤ ∑ θ, ν θ * w a θ) :
+    ∑ θ, ν θ * v a θ ≤ ∑ θ, ν θ * price v w y θ := by
+  -- obedience at `ν` makes the multiplier terms of the Lagrangian payoff nonnegative
+  have hobed : 0 ≤ ∑ a', y (a, a') * ∑ θ, ν θ * (w a θ - w a' θ) := sum_nonneg fun a' _ =>
+    mul_nonneg (hy _) (by simpa [mul_sub, sum_sub_distrib] using ha a')
+  calc ∑ θ, ν θ * v a θ ≤ ∑ θ, ν θ * lag v w y a θ := by
+        simp only [lag, mul_add, sum_add_distrib, mul_sum]
+        rw [sum_comm (s := univ) (t := univ)]
+        simp only [← mul_sum, mul_left_comm (ν _)] at hobed ⊢
+        linarith
+    _ ≤ _ := sum_le_sum fun θ _ =>
+        mul_le_mul_of_nonneg_left (le_sup' (lag v w y · θ) (mem_univ a)) (hν θ)
+
+/-- **Value of persuasion = least expected state price** (no duality gap, as an equality). -/
+theorem value_eq_iInf {xs : A × Θ → ℝ} (hxs : xs ∈ Schemes μ) (hob : Obedient w xs)
+    (hopt : ∀ x ∈ Schemes μ, Obedient w x → obj v x ≤ obj v xs) :
+    obj v xs = ⨅ y : {y : A × A → ℝ // 0 ≤ y}, dualValue μ v w y := by
+  have : Nonempty {y : A × A → ℝ // 0 ≤ y} := ⟨⟨0, le_rfl⟩⟩
+  have hbdd : BddBelow (Set.range fun y : {y : A × A → ℝ // 0 ≤ y} => dualValue μ v w y) :=
+    ⟨obj v xs, by rintro _ ⟨y, rfl⟩; exact weak_duality hxs hob y.2⟩
+  refine le_antisymm (le_ciInf fun y => weak_duality hxs hob y.2)
+    (le_of_forall_pos_le_add fun ε hε => ?_)
+  obtain ⟨y, hy, h⟩ := strong_duality hxs hob hopt hε
+  exact (ciInf_le hbdd ⟨y, hy⟩).trans h
 
 end Duality
 
