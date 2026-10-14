@@ -14,6 +14,8 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Riley–Zeckhauser (1983)**: posted prices optimal for any continuous density | `Ironing.lean` | `Ironing.exists_postedPrice_optimal`, `revenue_postedPrice` |
 | **Myerson (1981)**: optimal auction, n bidders, **any continuous positive prior** (ironing) | `Hull.lean`, `Ironing.lean`, `Auction.lean` | `Auction.exists_optimal_auction`, `ironed_optimal`, `myerson_optimal` |
 | Existence of ironings (convex hull in quantile coordinates) | `Hull.lean` | `Ironing.exists_ironed` |
+| Uniqueness of the ironing a.e. | `Ironing.lean` | `Ironing.Ironed.ae_eq` |
+| **Bulow–Roberts (1989)**: the hull is the concave hull of the revenue curve | `RevenueCurve.lean` | `Ironing.hull_eq_concaveHull`, `fslope_hull_eq_slope` |
 | **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
@@ -56,6 +58,15 @@ A single buyer has a value θ ∈ [a, b] and quasilinear utility θq − t.
     version of the `Supports` lemma (`FSupports.sub_eq`).
   * Where Ĝ < G, a short chord still lies below G, so maximality forces Ĝ to be that chord,
     and φ̄ is flat there (`HullSetting.flat`).
+* **The ironing is unique a.e.** (`Ironed.ae_eq`). Two ironings φ, ψ of the same continuous
+  positive density agree a.e. on [a, b]. The gap integrands differ by (φ − ψ) f, so
+  ∫ (φ − ψ)² f is a sum of four gap terms: two vanish by complementary slackness, two are ≤ 0
+  by the ironing bound (a bounded monotone score is a rescaled allocation).
+* **It is the textbook ironing** (`hull_eq_concaveHull`). Selling with probability q takes the
+  price P(q) = F⁻¹(1 − q) and earns R(q) = q P(q). Since G(p) = a − R(1 − F(p)), the type-space
+  hull is Ĝ(p) = a − R̄(1 − F(p)), where R̄ is the least concave majorant of R on [0, 1]. Every
+  chord slope of Ĝ in quantile coordinates is a chord slope of R̄ (`fslope_hull_eq_slope`): the
+  ironed virtual value is marginal ironed revenue.
 * **Myerson's optimal auction exists for every continuous positive prior**
   (`exists_optimal_auction`): no regularity assumption and no assumed ironing.
 
@@ -110,10 +121,12 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * **Clamped virtual values.** Virtual values are evaluated at the type clamped into [a, b].
   Types lie in [a, b] almost surely, so this is harmless.
 * **The ironing is built in type space.** `exists_ironed` builds the hull directly in type
-  space, with convexity measured by the quantile F; this is equivalent to the convex hull of
-  H(q) = ∫₀^q φ(F⁻¹(r)) dr, i.e. the concave hull of the revenue curve. The equivalence is
-  argued on paper, not formalised, as is uniqueness of the ironing a.e. `Ironed` asks for a
-  bounded measurable φ̄, not a continuous one: the proofs never use continuity.
+  space, with convexity measured by the quantile F. Its equivalence with the concave hull of
+  the revenue curve is proved for the hull itself and its chord slopes (`hull_eq_concaveHull`,
+  `fslope_hull_eq_slope`); the ironed value as a one-sided derivative of R̄ is not stated
+  separately. Uniqueness (`Ironed.ae_eq`) is a.e. on [a, b] and needs a positive density.
+  `Ironed` asks for a bounded measurable φ̄, not a continuous one: the proofs never use
+  continuity.
 * **Densities must be positive on the closed interval.** A density vanishing at an endpoint
   (e.g. Beta(2,2)) is excluded: there the virtual value is unbounded, and `Ironed` asks for a
   bounded φ̄.
@@ -147,5 +160,6 @@ lake build
 Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
-* The multi-period Doval–Skreta model and the Coasian dynamics.
+* The multi-period Doval–Skreta model (sequential rationality under limited commitment) and the
+  Coasian dynamics.
 * Continuous-state persuasion duality (Dworczak–Kolotilin), using convex price functions.

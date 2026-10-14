@@ -243,10 +243,10 @@ noncomputable def gap (f : ℝ → ℝ) (a : ℝ) (φ : ℝ → ℝ) (p : ℝ) :
   ∫ θ in a..p, J f a θ - φ θ * f θ
 
 /-- `φ` **irons** the virtual value of the density `f` on `[a, b]`: it is monotone, the gap is
-nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. Any such `φ` equals,
-a.e. on `[a, b]`, the quantile-derivative of the convex hull of the cumulative virtual surplus
-(argued on paper, not formalised); `exists_ironed` builds one. When the virtual value is itself
-monotone, it irons itself with zero gap: `ironed_virtualValue`. -/
+nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. For a continuous
+positive density an ironing exists (`exists_ironed`, the slope of the convex hull of the
+cumulative virtual surplus) and is unique a.e. on `[a, b]` (`Ironed.ae_eq`). When the virtual
+value is itself monotone, it irons itself with zero gap: `ironed_virtualValue`. -/
 structure Ironed (f : ℝ → ℝ) (a b : ℝ) (φ : ℝ → ℝ) : Prop where
   mono : Monotone φ
   bddMeas : Auction.BddMeas φ
@@ -311,6 +311,101 @@ lemma gapTerm_eq_zero (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn 
   have hQyz : Q y = Q z := hfac y hy z hz (by rw [hflat y hyε, hflat z hzε])
   have hsz : s ≤ Q z := hQyz ▸ le_of_threshold_lt hQ hy hpy
   exact absurd (threshold_le hz hsz) (not_le.2 hzp)
+
+/-! ### Uniqueness of the ironing -/
+
+/-- Over all of `[a, b]` the gap integrand integrates to zero: the gap closes at `b`. -/
+lemma integral_gap_integrand (hI : Ironed f a b φ) :
+    ∫ θ in a..b, (J f a θ - φ θ * f θ) = 0 :=
+  hI.gap_right
+
+/-- **A bounded monotone score is a rescaled allocation.** Shifting and scaling `ψ` into
+`[0, 1]` changes `∫ ψ (J - φ f)` only by a positive factor, because the gap integrand
+integrates to zero. -/
+lemma exists_rescale (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b))
+    {ψ : ℝ → ℝ} (hψ : Monotone ψ) (hψb : Auction.BddMeas ψ) :
+    ∃ c > 0, ∃ Q : ℝ → ℝ, Monotone Q ∧ (∀ θ, Q θ ∈ Icc (0 : ℝ) 1) ∧
+      (∀ x y, ψ x = ψ y → Q x = Q y) ∧
+      ∫ θ in a..b, ψ θ * (J f a θ - φ θ * f θ) = c * ∫ θ in a..b, Q θ * (J f a θ - φ θ * f θ) := by
+  obtain ⟨C, hC⟩ := hψb.2
+  have hC0 : 0 ≤ C := (abs_nonneg _).trans (hC 0)
+  set c := C + 1
+  have hc : 0 < c := by positivity
+  have hg := gap_integrand_ab hab hI hf
+  refine ⟨2 * c, by positivity, fun θ => (ψ θ + c) / (2 * c),
+    fun x y h => div_le_div_of_nonneg_right (by linarith [hψ h]) (by positivity),
+    fun θ => ?_, fun x y h => by simp only [h], ?_⟩
+  · have := abs_le.1 (hC θ)
+    rw [mem_Icc, le_div_iff₀ (by positivity), div_le_iff₀ (by positivity)]
+    constructor <;> linarith
+  -- `∫ (ψ + c) g = ∫ ψ g`, since `∫ g = 0`
+  simp_rw [div_mul_eq_mul_div, intervalIntegral.integral_div, add_mul]
+  rw [intervalIntegral.integral_add (hψb.intervalIntegrable_mul hg) (hg.const_mul c),
+    intervalIntegral.integral_const_mul, integral_gap_integrand hI, mul_zero, add_zero]
+  field_simp
+
+/-- **Ironing bounds every monotone score**: `∫ ψ (J - φ f) ≤ 0` for bounded monotone `ψ`. -/
+lemma score_gapTerm_nonpos (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b))
+    {ψ : ℝ → ℝ} (hψ : Monotone ψ) (hψb : Auction.BddMeas ψ) :
+    ∫ θ in a..b, ψ θ * (J f a θ - φ θ * f θ) ≤ 0 := by
+  obtain ⟨c, hc, Q, hQ, h01, -, e⟩ := exists_rescale hab hI hf hψ hψb
+  rw [e]
+  exact mul_nonpos_of_nonneg_of_nonpos hc.le
+    (gapTerm_nonpos hab hI hf (hQ.monotoneOn _) fun θ _ => h01 θ)
+
+/-- **The ironed score costs nothing against its own gap**: `∫ φ (J - φ f) = 0`. -/
+lemma score_gapTerm_self (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b)) :
+    ∫ θ in a..b, φ θ * (J f a θ - φ θ * f θ) = 0 := by
+  obtain ⟨c, -, Q, hQ, h01, hfac, e⟩ := exists_rescale hab hI hf hI.mono hI.bddMeas
+  rw [e, gapTerm_eq_zero hab hI hf (hQ.monotoneOn _) (fun θ _ => h01 θ)
+    fun x _ y _ h => hfac x y h, mul_zero]
+
+/-- **The ironing is unique almost everywhere** (Myerson 1981, §6). Two ironings `φ, ψ` of the
+same continuous positive density agree a.e. on `[a, b]`. Proof: the gap integrands differ by
+`(φ - ψ) f`, so `∫ (φ - ψ)² f` is a sum of four gap terms; two vanish by complementary
+slackness and two are `≤ 0` by the ironing bound. -/
+theorem Ironed.ae_eq {ψ : ℝ → ℝ} (hab : a ≤ b) (hf : ContinuousOn f (Icc a b))
+    (hpos : ∀ θ ∈ Icc a b, 0 < f θ) (hφ : Ironed f a b φ) (hψ : Ironed f a b ψ) :
+    φ =ᵐ[volume.restrict (Icc a b)] ψ := by
+  set gφ := fun θ => J f a θ - φ θ * f θ
+  set gψ := fun θ => J f a θ - ψ θ * f θ
+  have iφ := gap_integrand_ab hab hφ hf
+  have iψ := gap_integrand_ab hab hψ hf
+  -- the squared difference is a combination of gap terms
+  have hsq : ∫ θ in a..b, (φ θ - ψ θ) ^ 2 * f θ =
+      ((∫ θ in a..b, φ θ * gψ θ) + ∫ θ in a..b, ψ θ * gφ θ) -
+        ((∫ θ in a..b, φ θ * gφ θ) + ∫ θ in a..b, ψ θ * gψ θ) := by
+    rw [← intervalIntegral.integral_add (hφ.bddMeas.intervalIntegrable_mul iψ)
+        (hψ.bddMeas.intervalIntegrable_mul iφ),
+      ← intervalIntegral.integral_add (hφ.bddMeas.intervalIntegrable_mul iφ)
+        (hψ.bddMeas.intervalIntegrable_mul iψ),
+      ← intervalIntegral.integral_sub
+        ((hφ.bddMeas.intervalIntegrable_mul iψ).add (hψ.bddMeas.intervalIntegrable_mul iφ))
+        ((hφ.bddMeas.intervalIntegrable_mul iφ).add (hψ.bddMeas.intervalIntegrable_mul iψ))]
+    congr 1; ext θ; ring
+  have hle : ∫ θ in a..b, (φ θ - ψ θ) ^ 2 * f θ ≤ 0 := by
+    rw [hsq, score_gapTerm_self hab hφ hf, score_gapTerm_self hab hψ hf]
+    linarith [score_gapTerm_nonpos hab hψ hf hφ.mono hφ.bddMeas,
+      score_gapTerm_nonpos hab hφ hf hψ.mono hψ.bddMeas]
+  -- a nonnegative integrand with nonpositive integral vanishes a.e.
+  have hnn : ∀ θ ∈ Icc a b, 0 ≤ (φ θ - ψ θ) ^ 2 * f θ := fun θ hθ =>
+    mul_nonneg (sq_nonneg _) (hpos θ hθ).le
+  have hint : IntervalIntegrable (fun θ => (φ θ - ψ θ) ^ 2 * f θ) volume a b := by
+    have hd : Auction.BddMeas fun θ => (φ θ - ψ θ) ^ 2 := by
+      obtain ⟨C, hC⟩ := hφ.bddMeas.2; obtain ⟨D, hD⟩ := hψ.bddMeas.2
+      refine ⟨(hφ.bddMeas.1.sub hψ.bddMeas.1).pow_const 2, (C + D) ^ 2, fun θ => ?_⟩
+      dsimp only
+      rw [abs_of_nonneg (sq_nonneg _), ← sq_abs (φ θ - ψ θ)]
+      exact pow_le_pow_left₀ (abs_nonneg _) ((abs_sub _ _).trans (add_le_add (hC θ) (hD θ))) 2
+    exact hd.intervalIntegrable_mul (hf.intervalIntegrable_of_Icc hab)
+  have h0 := (intervalIntegral.integral_eq_zero_iff_of_le_of_nonneg_ae hab
+    ((ae_restrict_iff' measurableSet_Ioc).2 (ae_of_all _ fun θ hθ =>
+      hnn θ (Ioc_subset_Icc_self hθ))) hint).1
+    (le_antisymm hle (intervalIntegral.integral_nonneg hab hnn))
+  rw [← Measure.restrict_congr_set Ioc_ae_eq_Icc]
+  filter_upwards [h0, ae_restrict_mem measurableSet_Ioc] with θ hθ hmem
+  have hf0 := (hpos θ (Ioc_subset_Icc_self hmem)).ne'
+  simpa [sub_eq_zero, hf0] using hθ
 
 end Ironing
 

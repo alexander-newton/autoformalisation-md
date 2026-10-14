@@ -98,6 +98,13 @@ lemma BddMeas.intervalIntegrable {g : ℝ → ℝ} (hg : BddMeas g) (a b : ℝ) 
   refine ⟨?_, ?_⟩ <;> exact .of_bound measure_Ioc_lt_top hg.1.aestronglyMeasurable C
     (ae_of_all _ fun x => by simpa using hC x)
 
+/-- A bounded measurable weight keeps a function interval integrable. -/
+lemma BddMeas.intervalIntegrable_mul {g h : ℝ → ℝ} (hg : BddMeas g) {a b : ℝ}
+    (hh : IntervalIntegrable h volume a b) : IntervalIntegrable (fun θ => g θ * h θ) volume a b := by
+  obtain ⟨C, hC⟩ := hg.2
+  exact ⟨hh.1.bdd_mul hg.1.aestronglyMeasurable (ae_of_all _ fun x => by simpa using hC x),
+    hh.2.bdd_mul hg.1.aestronglyMeasurable (ae_of_all _ fun x => by simpa using hC x)⟩
+
 /-- Averaging out the other bidders preserves bounded measurability. -/
 lemma BddMeas.interim {g : (ι → ℝ) → ℝ} (hg : BddMeas g) (i : ι) :
     BddMeas fun s => ∫ θ, g (update θ i s) ∂Measure.pi ν := by
