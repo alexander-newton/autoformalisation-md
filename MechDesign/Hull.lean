@@ -119,6 +119,36 @@ lemma FConvex.chord_le (hK : FConvex F K a b) (hF : StrictMonoOn F (Icc a b)) {x
     have e := chord_right (K := K) (hF.injOn.ne hx₀ hy₀ hlt.ne)
     unfold chord at e ⊢; linarith
 
+/-- **A monotone function `F`-supports its weighted integral** (the quantile version of
+`MonotoneOn.supports_integral`): if `F` is the primitive of a density `f ≥ 0`, then
+`(F y - F x) φ x ≤ ∫ₓʸ φ f ≤ (F y - F x) φ y`. -/
+lemma fsupports_integral {φ f : ℝ → ℝ} (hab : a ≤ b) (hφ : MonotoneOn φ (Icc a b))
+    (hint : IntervalIntegrable (fun θ => φ θ * f θ) volume a b) (hf : ContinuousOn f (Icc a b))
+    (hf0 : ∀ θ ∈ Icc a b, 0 ≤ f θ) (hFf : ∀ x ∈ Icc a b, F x - F a = ∫ θ in a..x, f θ) :
+    Myerson.FSupports F φ (fun x => ∫ θ in a..x, φ θ * f θ) (Icc a b) := by
+  have ha : a ∈ Icc a b := ⟨le_rfl, hab⟩
+  have sub : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, uIcc x y ⊆ uIcc a b := fun x hx y hy => by
+    rw [uIcc_of_le hab]; exact uIcc_subset_Icc hx hy
+  have hfi : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, IntervalIntegrable f volume x y :=
+    fun x hx y hy => (hf.mono (uIcc_subset_Icc hx hy)).intervalIntegrable
+  have hφi : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, IntervalIntegrable (fun θ => φ θ * f θ) volume x y :=
+    fun x hx y hy => hint.mono_set (sub x hx y hy)
+  intro x hx y hy hxy
+  have hθ : ∀ θ ∈ Icc x y, θ ∈ Icc a b := fun θ hθ => ⟨hx.1.trans hθ.1, hθ.2.trans hy.2⟩
+  -- increments of `F` are integrals of `f`, and `φ` is squeezed between its end values
+  have hF : F y - F x = ∫ θ in x..y, f θ := by
+    rw [← sub_sub_sub_cancel_right (F y) (F x) (F a), hFf y hy, hFf x hx,
+      integral_interval_sub_left (hfi a ha y hy) (hfi a ha x hx)]
+  have hlo : ∀ θ ∈ Icc x y, f θ * φ x ≤ φ θ * f θ := fun θ h => by
+    rw [mul_comm]; exact mul_le_mul_of_nonneg_right (hφ hx (hθ θ h) h.1) (hf0 θ (hθ θ h))
+  have hhi : ∀ θ ∈ Icc x y, φ θ * f θ ≤ f θ * φ y := fun θ h => by
+    rw [mul_comm (f θ)]; exact mul_le_mul_of_nonneg_right (hφ (hθ θ h) hy h.2) (hf0 θ (hθ θ h))
+  simp only
+  rw [integral_interval_sub_left (hφi a ha y hy) (hφi a ha x hx), hF,
+    ← intervalIntegral.integral_mul_const, ← intervalIntegral.integral_mul_const]
+  exact ⟨integral_mono_on hxy ((hfi x hx y hy).mul_const _) (hφi x hx y hy) hlo,
+    integral_mono_on hxy (hφi x hx y hy) ((hfi x hx y hy).mul_const _) hhi⟩
+
 /-! ### The hull -/
 
 /-- The data for the hull: `F` is a continuous, strictly increasing quantile on `[a, b]`, and
@@ -408,34 +438,13 @@ lemma hull_sub_eq_integral {f : ℝ → ℝ} (hf : ContinuousOn f (Icc a b))
     (hf0 : ∀ θ ∈ Icc a b, 0 ≤ f θ) (hFf : ∀ x ∈ Icc a b, F x - F a = ∫ θ in a..x, f θ)
     {p : ℝ} (hp : p ∈ Icc a b) :
     hull F G a b p - hull F G a b a = ∫ θ in a..p, ironedValue F G a b L θ * f θ := by
-  set φ := ironedValue F G a b L
   have hsub : Icc a p ⊆ Icc a b := Icc_subset_Icc_right hp.2
-  have hfi : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, IntervalIntegrable f volume x y :=
-    fun x hx y hy => (hf.mono (uIcc_subset_Icc hx hy)).intervalIntegrable
-  have hint : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, IntervalIntegrable (fun θ => φ θ * f θ) volume x y :=
-    fun x hx y hy => (S.ironedValue_bddMeas.intervalIntegrable x y).mul_continuousOn
-      (hf.mono (uIcc_subset_Icc hx hy))
-  -- increments of `F` are integrals of `f`
-  have hF : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, F y - F x = ∫ θ in x..y, f θ := fun x hx y hy => by
-    rw [← sub_sub_sub_cancel_right (F y) (F x) (F a), hFf y hy, hFf x hx,
-      integral_interval_sub_left (hfi a S.left_mem y hy) (hfi a S.left_mem x hx)]
-  -- the integral of `φ f` is `F`-supported by the monotone `φ`
-  have hW : Myerson.FSupports F φ (fun x => ∫ θ in a..x, φ θ * f θ) (Icc a p) := by
-    intro x hx y hy hxy
-    have hx' := hsub hx; have hy' := hsub hy
-    have hθ : ∀ θ ∈ Icc x y, θ ∈ Icc a b := fun θ hθ => ⟨hx'.1.trans hθ.1, hθ.2.trans hy'.2⟩
-    simp only
-    rw [integral_interval_sub_left (hint a S.left_mem y hy') (hint a S.left_mem x hx'),
-      hF x hx' y hy', ← intervalIntegral.integral_mul_const, ← intervalIntegral.integral_mul_const]
-    have hlo : ∀ θ ∈ Icc x y, f θ * φ x ≤ φ θ * f θ := fun θ h => by
-      rw [mul_comm]; exact mul_le_mul_of_nonneg_right (S.ironedValue_monotone h.1) (hf0 θ (hθ θ h))
-    have hhi : ∀ θ ∈ Icc x y, φ θ * f θ ≤ f θ * φ y := fun θ h => by
-      rw [mul_comm (f θ)]
-      exact mul_le_mul_of_nonneg_right (S.ironedValue_monotone h.2) (hf0 θ (hθ θ h))
-    exact ⟨integral_mono_on hxy ((hfi x hx' y hy').mul_const _) (hint x hx' y hy') hlo,
-      integral_mono_on hxy (hint x hx' y hy') ((hfi x hx' y hy').mul_const _) hhi⟩
+  have hW := fsupports_integral S.hab.le (S.ironedValue_monotone.monotoneOn _)
+    ((S.ironedValue_bddMeas.intervalIntegrable a b).mul_continuousOn
+      (by rwa [uIcc_of_le S.hab.le])) hf hf0 hFf
   have := Myerson.FSupports.sub_eq (S.mono.mono hsub) (S.cont.mono hsub)
-    (fun x hx y hy => S.fsupports x (hsub hx) y (hsub hy)) hW hp.1
+    (fun x hx y hy => S.fsupports x (hsub hx) y (hsub hy))
+    (fun x hx y hy => hW x (hsub hx) y (hsub hy)) hp.1
   simpa using this
 
 end HullSetting
@@ -452,6 +461,15 @@ variable {a b : ℝ} {f : ℝ → ℝ}
 
 /-- The cumulative virtual surplus `G(p) = ∫ₐᵖ J`. -/
 noncomputable def cumJ (f : ℝ → ℝ) (a p : ℝ) : ℝ := ∫ θ in a..p, J f a θ
+
+/-- A pointwise bound `|g| ≤ L h` integrates. -/
+lemma abs_integral_le_mul {g h : ℝ → ℝ} {L x y : ℝ} (hxy : x ≤ y)
+    (hg : IntervalIntegrable g volume x y) (hh : IntervalIntegrable h volume x y)
+    (hb : ∀ θ ∈ Icc x y, |g θ| ≤ L * h θ) : |∫ θ in x..y, g θ| ≤ L * ∫ θ in x..y, h θ := by
+  rw [abs_le, ← intervalIntegral.integral_const_mul, ← intervalIntegral.integral_neg]
+  exact ⟨integral_mono_on hxy (hh.const_mul L).neg hg fun θ hθ => by
+      linarith [neg_abs_le (g θ), hb θ hθ],
+    integral_mono_on hxy hg (hh.const_mul L) fun θ hθ => (le_abs_self _).trans (hb θ hθ)⟩
 
 /-- With a continuous positive density, the quantile `F` and the cumulative virtual surplus `G`
 satisfy the hull's hypotheses, with `L` a bound on the virtual value. -/
@@ -484,24 +502,20 @@ lemma hullSetting (hab : a < b) (hf : ContinuousOn f (Icc a b))
     rw [uIcc_of_le hab.le] at this; exact this
   · -- `G`'s increments are bounded by `L` times `F`'s, since `|J| ≤ L f`
     simp only [cdf, cumJ]
-    rw [incr hJi x hx y hy, incr hfi x hx y hy, abs_le, ← intervalIntegral.integral_const_mul,
-      ← intervalIntegral.integral_neg]
-    have hb : ∀ θ ∈ Icc x y, |J f a θ| ≤ L * f θ := fun θ hθ => by
-      have hθ' : θ ∈ Icc a b := ⟨hx.1.trans hθ.1, hθ.2.trans hy.2⟩
-      have := hL θ hθ'
-      rw [Pi.div_apply, Real.norm_eq_abs, abs_div, abs_of_pos (hpos θ hθ'),
-        div_le_iff₀ (hpos θ hθ')] at this
-      exact this
-    exact ⟨integral_mono_on hxy ((hfi x hx y hy).const_mul L).neg (hJi x hx y hy)
-        fun θ hθ => by linarith [neg_abs_le (J f a θ), hb θ hθ],
-      integral_mono_on hxy (hJi x hx y hy) ((hfi x hx y hy).const_mul L)
-        fun θ hθ => (le_abs_self _).trans (hb θ hθ)⟩
+    rw [incr hJi x hx y hy, incr hfi x hx y hy]
+    refine abs_integral_le_mul hxy (hJi x hx y hy) (hfi x hx y hy) fun θ hθ => ?_
+    have hθ' : θ ∈ Icc a b := ⟨hx.1.trans hθ.1, hθ.2.trans hy.2⟩
+    have := hL θ hθ'
+    rwa [Pi.div_apply, Real.norm_eq_abs, abs_div, abs_of_pos (hpos θ hθ'),
+      div_le_iff₀ (hpos θ hθ')] at this
 
-/-- **Every continuous positive density admits an ironing** (Myerson 1981, §6): the right
-quantile-slope of the convex hull of the cumulative virtual surplus. -/
-theorem exists_ironed (hab : a < b) (hf : ContinuousOn f (Icc a b))
-    (hpos : ∀ θ ∈ Icc a b, 0 < f θ) : ∃ φ, Ironed f a b φ := by
+/-- **The hull's slope irons the virtual value** (Myerson 1981, §6): the right quantile-slope
+of the convex hull of the cumulative virtual surplus is an ironing. -/
+theorem ironedValue_ironed (hab : a < b) (hf : ContinuousOn f (Icc a b))
+    (hpos : ∀ θ ∈ Icc a b, 0 < f θ) :
+    ∃ L, Ironed f a b (ironedValue (cdf f a) (cumJ f a) a b L) := by
   obtain ⟨L, S⟩ := hullSetting hab hf hpos
+  refine ⟨L, ?_⟩
   set φ := ironedValue (cdf f a) (cumJ f a) a b L
   have hFf : ∀ x ∈ Icc a b, cdf f a x - cdf f a a = ∫ θ in a..x, f θ := fun x _ => by
     simp [cdf]
@@ -517,10 +531,21 @@ theorem exists_ironed (hab : a < b) (hf : ContinuousOn f (Icc a b))
       rw [S.hull_left] at h
       simp only [gap, intervalIntegral.integral_sub hJ hφf, cumJ, integral_same] at h ⊢
       linarith
-  exact ⟨φ, S.ironedValue_monotone, S.ironedValue_bddMeas,
+  exact ⟨S.ironedValue_monotone, S.ironedValue_bddMeas,
     fun p hp => by rw [hgap p hp]; exact sub_nonneg.2 (S.hull_le hp),
     by rw [hgap b S.right_mem, S.hull_right, sub_self],
     fun p hp hpos' => S.flat hp (by rw [hgap p (Ioo_subset_Icc_self hp)] at hpos'; linarith)⟩
+
+/-- **Every continuous positive density admits an ironing.** (On a degenerate interval any
+constant irons trivially.) -/
+theorem exists_ironed (hab : a ≤ b) (hf : ContinuousOn f (Icc a b))
+    (hpos : ∀ θ ∈ Icc a b, 0 < f θ) : ∃ φ, Ironed f a b φ := by
+  rcases hab.eq_or_lt with rfl | hab
+  · refine ⟨fun _ => 0, monotone_const, ⟨measurable_const, 0, by simp⟩, fun p hp => ?_,
+      by simp [gap], fun p hp => absurd hp (by simp)⟩
+    simp [gap, le_antisymm hp.2 hp.1]
+  · obtain ⟨L, h⟩ := ironedValue_ironed hab hf hpos
+    exact ⟨_, h⟩
 
 end Ironing
 
@@ -543,10 +568,7 @@ theorem exists_optimal_auction (P : Prior ν f a b) :
       (ironedAuction a b φ).BIC ν a b ∧ (∀ i, ((ironedAuction a b φ).interim ν i).IR a b) ∧
       ∀ M : Mechanism ι, M.BddMeasurable → M.Feasible → M.BIC ν a b →
         (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ (ironedAuction a b φ).revenue ν := by
-  -- the support is a nondegenerate interval, since each density integrates to one
-  have hab : a < b := P.hab.lt_of_ne fun h => by
-    have := P.integral_density (Classical.arbitrary ι); simp [h] at this
-  choose φ hφ using fun i => exists_ironed hab (P.cont i).continuousOn (P.pos i)
+  choose φ hφ using fun i => exists_ironed P.hab (P.cont i).continuousOn (P.pos i)
   exact ⟨φ, hφ, ironed_optimal P hφ⟩
 
 end Auction

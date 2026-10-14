@@ -243,10 +243,10 @@ noncomputable def gap (f : ℝ → ℝ) (a : ℝ) (φ : ℝ → ℝ) (p : ℝ) :
   ∫ θ in a..p, J f a θ - φ θ * f θ
 
 /-- `φ` **irons** the virtual value of the density `f` on `[a, b]`: it is monotone, the gap is
-nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. (This is the
-derivative of the convex hull of `H(q) = ∫₀^q φ(F⁻¹ r) dr`, i.e. of the concave hull of the
-revenue curve, read in type space; when the virtual value is itself monotone,
-it irons itself with zero gap: `ironed_virtualValue`.) -/
+nonnegative and closes at `b`, and `φ` is flat wherever the gap is open. Any such `φ` equals,
+a.e. on `[a, b]`, the quantile-derivative of the convex hull of the cumulative virtual surplus
+(argued on paper, not formalised); `exists_ironed` builds one. When the virtual value is itself
+monotone, it irons itself with zero gap: `ironed_virtualValue`. -/
 structure Ironed (f : ℝ → ℝ) (a b : ℝ) (φ : ℝ → ℝ) : Prop where
   mono : Monotone φ
   bddMeas : Auction.BddMeas φ
