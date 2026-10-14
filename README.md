@@ -65,8 +65,8 @@ A single buyer has a value θ ∈ [a, b] and quasilinear utility θq − t.
 * **It is the textbook ironing** (`hull_eq_concaveHull`). Selling with probability q takes the
   price P(q) = F⁻¹(1 − q) and earns R(q) = q P(q). Since G(p) = a − R(1 − F(p)), the type-space
   hull is Ĝ(p) = a − R̄(1 − F(p)), where R̄ is the least concave majorant of R on [0, 1]. Every
-  chord slope of Ĝ in quantile coordinates is a chord slope of R̄ (`fslope_hull_eq_slope`): the
-  ironed virtual value is marginal ironed revenue.
+  chord slope of Ĝ in quantile coordinates is a chord slope of R̄ (`fslope_hull_eq_slope`). In
+  this chord sense, the ironed virtual value is marginal ironed revenue.
 * **Myerson's optimal auction exists for every continuous positive prior**
   (`exists_optimal_auction`): no regularity assumption and no assumed ironing.
 

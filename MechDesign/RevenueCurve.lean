@@ -14,7 +14,8 @@ The two agree. The cumulative virtual surplus is `G(p) = a - R(1 - F p)` (each t
 a posted-price revenue), and `M ↦ (θ ↦ a - M(1 - F θ))` turns concave majorants of `R` into
 `F`-convex minorants of `G` and back. Hence `Ĝ(p) = a - R̄(1 - F p)` (`hull_eq_concaveHull`),
 and every chord slope of `Ĝ`, from which the ironed virtual value is built, is a chord slope of
-`R̄` (`fslope_hull_eq_slope`): the ironed virtual value is marginal ironed revenue.
+`R̄` (`fslope_hull_eq_slope`). In this sense the ironed virtual value is marginal ironed revenue;
+the one-sided derivative itself is not stated.
 -/
 
 open MeasureTheory Set intervalIntegral Myerson
@@ -86,14 +87,17 @@ lemma finv_apply (hF : StrictMonoOn F (Icc a b)) (hFc : ContinuousOn F (Icc a b)
 variable {f : ℝ → ℝ}
 
 variable (f) in
-/-- The price at which the good sells with probability `q`: `P(q) = F⁻¹(1 - q)`. -/
+/-- The price at which the good sells with probability `q`: `P(q) = F⁻¹(1 - q)`, for
+`q ∈ [0, 1]` (outside, `finv` returns an arbitrary value). -/
 noncomputable def priceAt (a b q : ℝ) : ℝ := finv (cdf f a) a b (1 - q)
 
 variable (f) in
-/-- **The revenue curve** `R(q) = q P(q)`: revenue as a function of the sale probability. -/
+/-- **The revenue curve** `R(q) = q P(q)`: revenue as a function of the sale probability
+`q ∈ [0, 1]`. -/
 noncomputable def revenueCurve (a b q : ℝ) : ℝ := q * priceAt f a b q
 
-/-- **The concave hull** of `R` on `[0, 1]`: its least concave majorant. -/
+/-- **The concave hull** of `R` on `[0, 1]`: its least concave majorant. Meaningful for
+`q ∈ [0, 1]` and `R` bounded above there; otherwise `sInf` returns the junk value `0`. -/
 noncomputable def concaveHull (R : ℝ → ℝ) (q : ℝ) : ℝ :=
   sInf ((fun M => M q) '' {M | ConcaveOn ℝ (Icc 0 1) M ∧ ∀ r ∈ Icc (0 : ℝ) 1, R r ≤ M r})
 
@@ -164,7 +168,7 @@ theorem hull_eq_concaveHull (hab : a < b) (hf : ContinuousOn f (Icc a b))
       linarith [S.le_hull hK hp]
     linarith
 
-/-- **The ironed virtual value is marginal ironed revenue.** Every quantile chord slope of the
+/-- **Chord slopes of the hull are chord slopes of `R̄`.** Every quantile chord slope of the
 type-space hull, from which `ironedValue` is built, is the chord slope of the concave hull of
 the revenue curve between the corresponding sale probabilities. -/
 theorem fslope_hull_eq_slope (hab : a < b) (hf : ContinuousOn f (Icc a b))
