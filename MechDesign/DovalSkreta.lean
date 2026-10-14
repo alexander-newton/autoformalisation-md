@@ -3,7 +3,8 @@ Copyright (c) 2026. Released under Apache 2.0 license.
 -/
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Algebra.BigOperators.Field
-import Mathlib.Data.Real.Basic
+import Mathlib.Basic.Real.Basic
+import Mathlib.Data.Fintype.Prod
 
 /-!
 # Doval–Skreta: canonical mechanisms with beliefs as output messages
@@ -35,15 +36,16 @@ open Finset
 
 namespace DovalSkreta
 
+open Classical
+
 variable {Θ M S X : Type*} [Fintype Θ] [Fintype M] [Fintype S] [Fintype X]
-  [DecidableEq Θ] [DecidableEq X]
 
 /-- `p` is a probability vector. -/
 def IsDist {α : Type*} [Fintype α] (p : α → ℝ) : Prop := (∀ a, 0 ≤ p a) ∧ ∑ a, p a = 1
 
 section Setup
 
-/-- The environment: prior `μ`, mechanism `ζ` (input message ↦ distribution over public
+/- The environment: prior `μ`, mechanism `ζ` (input message ↦ distribution over public
 output message × allocation), and agent strategy `σ` (type ↦ distribution over inputs). -/
 variable (μ : Θ → ℝ) (ζ : M → S × X → ℝ) (σ : Θ → M → ℝ)
 
@@ -64,9 +66,8 @@ noncomputable def relabel (o : S × X) : (Θ → ℝ) × X := (post μ ζ σ o, 
 
 /-- The finite set of canonical outputs. -/
 noncomputable def outputs : Finset ((Θ → ℝ) × X) :=
-  haveI := Classical.decEq (Θ → ℝ); univ.image (relabel μ ζ σ)
+  univ.image (relabel μ ζ σ)
 
-open Classical in
 /-- **The canonical mechanism**: input = reported type, output = (posterior, allocation).
 A report `θ` produces output `b` with the total probability of all original public outcomes
 that induce `b`. -/
@@ -83,12 +84,12 @@ theorem sum_canonical (θ : Θ) (g : (Θ → ℝ) × X → ℝ) :
   simp_rw [sum_mul]
   rw [← Finset.sum_fiberwise_of_maps_to (s := univ) (t := univ.image (relabel μ ζ σ))
     (g := relabel μ ζ σ) (fun o _ => mem_image_of_mem _ (mem_univ o))]
-  refine sum_congr (by congr 1) fun b _ => sum_congr (by ext; simp) fun o ho => ?_
+  refine sum_congr rfl fun b _ => sum_congr (by ext; simp) fun o ho => ?_
   rw [(mem_filter.1 ho).2]
 
 /-- The agent's expected utility (in the original mechanism) of sending message `m` when her
 type is `θ`; continuation payoffs depend on the public posterior. -/
-def payoff (u : Θ → X → (Θ → ℝ) → ℝ) (θ : Θ) (m : M) : ℝ :=
+noncomputable def payoff (u : Θ → X → (Θ → ℝ) → ℝ) (θ : Θ) (m : M) : ℝ :=
   ∑ o, ζ m o * u θ o.2 (post μ ζ σ o)
 
 /-- The agent's expected utility in the canonical mechanism, type `θ` reporting `θ'`. -/
@@ -143,7 +144,7 @@ theorem canonical_isDist (hσ : ∀ θ, IsDist (σ θ)) (hζ : ∀ m, IsDist (ζ
     mul_nonneg ((hσ θ).1 m) ((hζ m).1 o), ?_⟩
   have := sum_canonical μ ζ σ θ (fun _ => 1)
   simp only [mul_one] at this
-  rw [this, outProb, sum_comm]
+  rw [this]; simp only [outProb]; rw [sum_comm]
   simp [← mul_sum, (hζ _).2, (hσ θ).2]
 
 /-- **Self-consistency of beliefs.** Under truth-telling in the canonical mechanism, the joint
@@ -158,20 +159,24 @@ theorem canonical_posterior (hμ : ∀ θ, 0 ≤ μ θ) (hσ : ∀ θ m, 0 ≤ �
   refine sum_congr rfl fun o ho => ?_
   have hb : relabel μ ζ σ o = b := by convert (mem_filter.1 ho).2
   rw [← hb]
+  rw [← mul_sum]
   change joint μ ζ σ θ o = post μ ζ σ o θ * marg μ ζ σ o
   have hj : ∀ θ, 0 ≤ joint μ ζ σ θ o := fun θ =>
     mul_nonneg (hμ θ) (sum_nonneg fun m _ => mul_nonneg (hσ θ m) (hζ m o))
-  rcases (sum_nonneg fun θ _ => hj θ : 0 ≤ marg μ ζ σ o).lt_or_eq with h | h
-  · simp [post, div_mul_cancel₀ _ h.ne']
-  · rw [← h, mul_zero]
+  have hm : 0 ≤ marg μ ζ σ o := sum_nonneg fun θ _ => hj θ
+  rcases hm.lt_or_eq with h | h
+  · simp only [post]; rw [div_mul_cancel₀ _ h.ne']
+  · rw [← h, mul_zero]; unfold marg at h
     exact (sum_eq_zero_iff_of_nonneg (fun θ _ => hj θ)).1 h.symm θ (mem_univ θ)
 
 /-- **Bayes plausibility.** The canonical posteriors average back to the prior. -/
 theorem canonical_bayesPlausible (hσ : ∀ θ, IsDist (σ θ)) (hζ : ∀ m, IsDist (ζ m))
     (hμ : ∀ θ, 0 ≤ μ θ) (θ : Θ) :
     ∑ b ∈ outputs μ ζ σ, (∑ θ', μ θ' * canonical μ ζ σ θ' b) * b.1 θ = μ θ := by
-  simp_rw [mul_comm _ (b.1 θ) , ← canonical_posterior hμ (fun θ => (hσ θ).1)
-    (fun m => (hζ m).1), ← mul_sum, (canonical_isDist hσ hζ θ).2, mul_one]
-
+  have h := fun b => canonical_posterior hμ (fun θ => (hσ θ).1) (fun m => (hζ m).1) θ b
+  calc ∑ b ∈ outputs μ ζ σ, (∑ θ', μ θ' * canonical μ ζ σ θ' b) * b.1 θ
+      = ∑ b ∈ outputs μ ζ σ, μ θ * canonical μ ζ σ θ b :=
+        sum_congr rfl fun b _ => by rw [h b, mul_comm]
+    _ = μ θ := by rw [← mul_sum, (canonical_isDist hσ hζ θ).2, mul_one]
 
 end DovalSkreta
