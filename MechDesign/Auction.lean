@@ -100,7 +100,8 @@ lemma BddMeas.intervalIntegrable {g : ℝ → ℝ} (hg : BddMeas g) (a b : ℝ) 
 
 /-- A bounded measurable weight keeps a function interval integrable. -/
 lemma BddMeas.intervalIntegrable_mul {g h : ℝ → ℝ} (hg : BddMeas g) {a b : ℝ}
-    (hh : IntervalIntegrable h volume a b) : IntervalIntegrable (fun θ => g θ * h θ) volume a b := by
+    (hh : IntervalIntegrable h volume a b) :
+    IntervalIntegrable (fun θ => g θ * h θ) volume a b := by
   obtain ⟨C, hC⟩ := hg.2
   exact ⟨hh.1.bdd_mul hg.1.aestronglyMeasurable (ae_of_all _ fun x => by simpa using hC x),
     hh.2.bdd_mul hg.1.aestronglyMeasurable (ae_of_all _ fun x => by simpa using hC x)⟩

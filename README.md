@@ -16,7 +16,8 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | Existence of ironings (convex hull in quantile coordinates) | `Hull.lean` | `Ironing.exists_ironed` |
 | Uniqueness of the ironing a.e. | `Ironing.lean` | `Ironing.Ironed.ae_eq` |
 | **Bulow–Roberts (1989)**: the hull is the concave hull of the revenue curve | `RevenueCurve.lean` | `Ironing.hull_eq_concaveHull`, `fslope_hull_eq_slope` |
-| **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |
+| **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible`, `toCanonical_IC`, `toCanonical_exit` |
+| **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 
@@ -94,6 +95,25 @@ finite types, messages and allocations.
 * **On-path posteriors are beliefs** (`post_isDist`): every outcome with positive total
   probability induces a probability vector. An outcome reached only by zero-prior types
   induces the junk "belief" 0; a full-support prior rules this out.
+* **The canonical play** (`toCanonical m₀`) keeps an exit option. The agent reports a type or
+  exits; exiting relabels the original exit message `m₀`. Truth-telling beats both misreports
+  and exit (`toCanonical_IC`); if `m₀` surely yields the outside allocation, so does exit
+  (`toCanonical_exit`); and announcing β induces posterior β, on and off path
+  (`toCanonical_post`).
+
+### Limited commitment over T periods
+A principal who cannot commit offers a mechanism in each of T periods to an agent with a
+persistent private type. Each mechanism has an exit message giving the outside allocation x₀.
+* **Equilibrium** (`IsEquilibrium`). A *belief-based* assessment picks, for each period t and
+  belief β, a play of some finite mechanism. At every t < T and belief β:
+  * the play starts from β, is valid and offers exit;
+  * the agent best-responds to flow utility plus continuation values W (t+1);
+  * the values V t β, W t θ β are those the play generates;
+  * **sequential rationality:** no valid play of any finite mechanism offering exit, with a
+    best-responding agent, gives the principal more than V t β.
+* **Canonical mechanisms are without loss** (`canonical_isEquilibrium`). Replacing every play
+  by its canonical play gives an equilibrium with the same values, in which every type reports
+  truthfully (`canonical_truthful`) and announced beliefs are the principal's posteriors.
 
 ### Persuasion as a linear program
 With finitely many states and actions, Bayesian persuasion is a linear program over obedient
@@ -130,11 +150,21 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * **Densities must be positive on the closed interval.** A density vanishing at an endpoint
   (e.g. Beta(2,2)) is excluded: there the virtual value is unbounded, and `Ironed` asks for a
   bounded φ̄.
-* **Doval–Skreta is the one-shot step only.** Sequential rationality, participation and
-  multiple periods are not modelled. Instead, the continuation is assumed to depend on the
-  outcome only through (allocation, posterior). In DS, different outcomes with the same
-  posterior could select different continuation equilibria. This relabelling step also holds
-  under full commitment.
+* **Doval–Skreta, one shot** (`DovalSkreta.lean`). The continuation is assumed to depend on
+  the outcome only through (allocation, posterior). This relabelling step also holds under full
+  commitment.
+* **Doval–Skreta, T periods** (`LimitedCommitment.lean`). This is a revelation principle for
+  *belief-based (Markov)* assessments, not DS's general perfect Bayesian equilibria. In DS,
+  play may depend on the whole history, and different outcomes with the same posterior may
+  select different continuation equilibria; here continuation depends on the belief only.
+  * The theorem transforms a given equilibrium. Existence of an equilibrium is not proved.
+  * Exit gives the outside allocation in the current period only; the game continues.
+  * Mechanisms are finite, the horizon is finite (with arbitrary terminal values V T, W T),
+    and there is no discounting (fold it into the flow payoffs).
+  * Continuation values are functions on all of `Θ → ℝ`, so they are also evaluated at the
+    junk off-path "belief" 0.
+  * The principal's deviations hold the continuation values fixed (a one-shot deviation at the
+    belief level).
 * **Persuasion is the finite case.** It is finite states and actions, not Kolotilin's
   continuous-state model. The dual infimum is shown to equal the value but is not shown to be
   attained.
@@ -148,7 +178,8 @@ prove a few short facts about it, and let each theorem be a short corollary. See
   and the ironing bound are each one line, and complementary slackness says a threshold never
   lies inside an ironing interval.
 * **Doval–Skreta.** The canonical mechanism is the image of a play under "relabel each outcome
-  by its posterior". IC then follows from two facts about averages.
+  by its posterior" (`pushforward`). IC then follows from two facts about averages, and the
+  T-period theorem is the one-shot step applied period by period.
 * **Duality.** One Hahn–Banach separation. The separating functional's signs come from pushing
   the image of the feasible set downward.
 
@@ -160,6 +191,5 @@ lake build
 Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
-* The multi-period Doval–Skreta model (sequential rationality under limited commitment) and the
-  Coasian dynamics.
+* Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
 * Continuous-state persuasion duality (Dworczak–Kolotilin), using convex price functions.
