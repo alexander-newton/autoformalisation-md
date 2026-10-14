@@ -45,13 +45,18 @@ lemma wavg_const (hp : IsDist p) (c : ℝ) : ∑ a, p a * c = c := by rw [← su
 lemma wavg_le (hp : IsDist p) {c : ℝ} (h : ∀ a, f a ≤ c) : ∑ a, p a * f a ≤ c :=
   (sum_le_sum fun a _ => mul_le_mul_of_nonneg_left (h a) (hp.1 a)).trans_eq (hp.wavg_const c)
 
+/-- An average lies above any lower bound on the support. -/
+lemma le_wavg_of_support (hp : IsDist p) {c : ℝ} (h : ∀ a, 0 < p a → c ≤ f a) :
+    c ≤ ∑ a, p a * f a :=
+  (hp.wavg_const c).symm.trans_le <| sum_le_sum fun a _ => by
+    rcases (hp.1 a).eq_or_lt with h0 | h0
+    · simp [← h0]
+    · exact mul_le_mul_of_nonneg_left (h a h0) h0.le
+
 /-- An average of maximisers is a maximum. -/
 lemma le_wavg (hp : IsDist p) (h : ∀ a, 0 < p a → ∀ b, f b ≤ f a) (b : α) :
     f b ≤ ∑ a, p a * f a :=
-  (hp.wavg_const (f b)).symm.trans_le <| sum_le_sum fun a _ => by
-    rcases (hp.1 a).eq_or_lt with h0 | h0
-    · simp [← h0]
-    · exact mul_le_mul_of_nonneg_left (h a h0 b) h0.le
+  hp.le_wavg_of_support fun a ha => h a ha b
 
 end IsDist
 
@@ -70,8 +75,7 @@ namespace Play
 
 variable (P : Play Θ M O X)
 
-/-- All the probabilities involved are probabilities. (Normalisation of the prior is not
-used by the proofs; it is part of what a play means.) -/
+/-- All the probabilities involved are probabilities. -/
 structure Valid : Prop where
   μ : IsDist P.μ
   ζ : ∀ m, IsDist (P.ζ m)
@@ -83,8 +87,21 @@ def outProb (θ : Θ) (o : O) : ℝ := ∑ m, P.σ θ m * P.ζ m o
 /-- Joint probability of type `θ` and public outcome `o`. -/
 def joint (θ : Θ) (o : O) : ℝ := P.μ θ * P.outProb θ o
 
-/-- The principal's posterior after public outcome `o` (Bayes' rule). -/
-noncomputable def post (o : O) : Θ → ℝ := fun θ => P.joint θ o / ∑ θ', P.joint θ' o
+/-- The principal's posterior after public outcome `o`: Bayes' rule on path, and the prior
+after an outcome of probability zero, where Bayes' rule is silent. -/
+noncomputable def post (o : O) : Θ → ℝ :=
+  if ∑ θ', P.joint θ' o = 0 then P.μ else fun θ => P.joint θ o / ∑ θ', P.joint θ' o
+
+variable {P} in
+omit [Fintype O] in
+lemma post_offPath {o : O} (h : ∑ θ', P.joint θ' o = 0) : P.post o = P.μ := by
+  simp [post, h]
+
+variable {P} in
+omit [Fintype O] in
+lemma post_onPath {o : O} (h : ∑ θ', P.joint θ' o ≠ 0) (θ : Θ) :
+    P.post o θ = P.joint θ o / ∑ θ', P.joint θ' o := by
+  simp [post, h]
 
 /-- Relabel a public outcome by (the posterior it induces, the allocation). -/
 noncomputable def relabel (o : O) : (Θ → ℝ) × X := (P.post o, P.alloc o)
@@ -133,6 +150,12 @@ theorem canonicalPayoff_eq (u : Θ → X → (Θ → ℝ) → ℝ) (θ θ' : Θ)
 
 variable {P}
 
+lemma outProb_nonneg (hP : P.Valid) (θ : Θ) (o : O) : 0 ≤ P.outProb θ o :=
+  sum_nonneg fun m _ => mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o)
+
+lemma joint_nonneg (hP : P.Valid) (θ : Θ) (o : O) : 0 ≤ P.joint θ o :=
+  mul_nonneg (hP.μ.1 θ) (outProb_nonneg hP θ o)
+
 /-- **Outcome equivalence**: for each type, truth-telling in the canonical mechanism yields the
 same expectation of every function of (allocation, posterior) as `σ` does originally. -/
 theorem canonical_outcome_eq (θ : Θ) (g : X → (Θ → ℝ) → ℝ) :
@@ -152,8 +175,7 @@ theorem canonical_IC (hP : P.Valid) (u : Θ → X → (Θ → ℝ) → ℝ)
 /-- Each report yields a probability distribution over canonical outputs. -/
 theorem canonical_isDist (hP : P.Valid) (θ : Θ) :
     (∀ b, 0 ≤ P.canonical θ b) ∧ ∑ b ∈ P.outputs, P.canonical θ b = 1 := by
-  refine ⟨fun b => sum_nonneg fun o _ => sum_nonneg fun m _ =>
-    mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o), ?_⟩
+  refine ⟨fun b => sum_nonneg fun o _ => outProb_nonneg hP θ o, ?_⟩
   have := P.sum_canonical θ fun _ => 1
   simp only [mul_one, outProb] at this
   rw [this, sum_comm]
@@ -168,21 +190,21 @@ theorem canonical_posterior (hP : P.Valid) (θ : Θ) (b : (Θ → ℝ) × X) :
   refine sum_congr rfl fun o ho => ?_
   have hb : P.relabel o = b := by convert (mem_filter.1 ho).2
   rw [← hb, ← mul_sum]
-  change P.joint θ o = P.joint θ o / (∑ θ', P.joint θ' o) * ∑ θ', P.joint θ' o
-  have hj : ∀ θ, 0 ≤ P.joint θ o := fun θ =>
-    mul_nonneg (hP.μ.1 θ) (sum_nonneg fun m _ => mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o))
-  rcases (sum_nonneg fun θ _ => hj θ).eq_or_lt with h | h
+  change P.joint θ o = P.post o θ * ∑ θ', P.joint θ' o
+  have hj := joint_nonneg hP
+  rcases (sum_nonneg fun θ _ => hj θ o).eq_or_lt with h | h
   · rw [← h, mul_zero]
-    exact (sum_eq_zero_iff_of_nonneg fun θ _ => hj θ).1 h.symm θ (mem_univ θ)
-  · rw [div_mul_cancel₀ _ h.ne']
+    exact (sum_eq_zero_iff_of_nonneg fun θ _ => hj θ o).1 h.symm θ (mem_univ θ)
+  · rw [post_onPath h.ne', div_mul_cancel₀ _ h.ne']
 
-/-- On path the principal's posterior is a genuine belief. (Off path, where the outcome has
-probability zero, `post` is the junk value `0`.) -/
-theorem post_isDist (hP : P.Valid) {o : O} (ho : 0 < ∑ θ, P.joint θ o) :
-    IsDist (P.post o) := by
-  refine ⟨fun θ => div_nonneg (mul_nonneg (hP.μ.1 θ) (sum_nonneg fun m _ =>
-    mul_nonneg ((hP.σ θ).1 m) ((hP.ζ m).1 o))) ho.le, ?_⟩
-  simp only [post]; rw [← sum_div, div_self ho.ne']
+/-- The principal's posterior is always a belief: on path by Bayes' rule, off path because it
+is the prior. -/
+theorem post_isDist (hP : P.Valid) (o : O) : IsDist (P.post o) := by
+  rcases (sum_nonneg fun θ _ => joint_nonneg hP θ o).eq_or_lt with h | h
+  · rw [post_offPath h.symm]; exact hP.μ
+  · refine ⟨fun θ => ?_, ?_⟩
+    · rw [post_onPath h.ne']; exact div_nonneg (joint_nonneg hP θ o) h.le
+    · simp only [post_onPath h.ne']; rw [← sum_div, div_self h.ne']
 
 /-- **Bayes plausibility**: the canonical posteriors average back to the prior. -/
 theorem canonical_bayesPlausible (hP : P.Valid) (θ : Θ) :
@@ -214,30 +236,6 @@ variable {m₀ : M}
     (P.toCanonical m₀).outProb θ b = P.canonical θ b.1 := by
   simp [outProb, toCanonical, Fintype.sum_option]
 
-/-- In the canonical play, announcing `β` induces the posterior `β`, on path and off. -/
-lemma toCanonical_post (hP : P.Valid) (b : P.outputs) : (P.toCanonical m₀).post b = b.1.1 := by
-  ext θ
-  have hpost := canonical_posterior hP θ b.1
-  simp only [post, joint, toCanonical_outProb]
-  change P.μ θ * P.canonical θ b.1 / ∑ θ', P.μ θ' * P.canonical θ' b.1 = b.1.1 θ
-  have hnn : ∀ θ', 0 ≤ P.μ θ' * P.canonical θ' b.1 :=
-    fun θ' => mul_nonneg (hP.μ.1 θ') ((canonical_isDist hP θ').1 _)
-  rcases (sum_nonneg fun θ' _ => hnn θ').eq_or_lt with h | h
-  · -- off path: every original outcome relabelled to `b` has probability zero, so its
-    -- posterior is the junk value `0`, as is the canonical one
-    obtain ⟨o, -, ho⟩ := mem_image.1 b.2
-    have hmarg : ∑ θ', P.joint θ' o = 0 := by
-      refine le_antisymm ?_ (sum_nonneg fun θ' _ => mul_nonneg (hP.μ.1 θ') (sum_nonneg
-        fun m _ => mul_nonneg ((hP.σ θ').1 m) ((hP.ζ m).1 o)))
-      rw [h]; refine sum_le_sum fun θ' _ => ?_
-      rw [joint, canonical]
-      exact mul_le_mul_of_nonneg_left (single_le_sum (f := P.outProb θ') (fun o' _ =>
-        sum_nonneg fun m _ => mul_nonneg ((hP.σ θ').1 m) ((hP.ζ m).1 o'))
-        (mem_filter.2 ⟨mem_univ o, ho⟩)) (hP.μ.1 θ')
-    rw [← h, div_zero, ← ho]
-    simp [relabel, post, hmarg]
-  · rw [hpost, mul_div_assoc, div_self h.ne', mul_one]
-
 lemma toCanonical_valid (hP : P.Valid) : (P.toCanonical m₀).Valid where
   μ := hP.μ
   ζ r := by
@@ -253,6 +251,31 @@ lemma toCanonical_valid (hP : P.Valid) : (P.toCanonical m₀).Valid where
           (canonical_isDist hP θ).2⟩
   σ θ := ⟨fun r => by cases r <;> simp only [toCanonical, Option.elim] <;> positivity,
     by simp [toCanonical, Fintype.sum_option]⟩
+
+lemma toCanonical_joint (θ : Θ) (b : P.outputs) :
+    (P.toCanonical m₀).joint θ b = P.μ θ * P.canonical θ b.1 := by
+  rw [joint, toCanonical_outProb]; rfl
+
+/-- In the canonical play, announcing `β` induces the posterior `β`, on path and off. -/
+lemma toCanonical_post (hP : P.Valid) (b : P.outputs) : (P.toCanonical m₀).post b = b.1.1 := by
+  have hnn := joint_nonneg (toCanonical_valid (m₀ := m₀) hP)
+  rcases (sum_nonneg fun θ _ => hnn θ b).eq_or_lt with h | h
+  · -- off path: every original outcome relabelled to `b` is off path too, so both
+    -- posteriors are the prior
+    obtain ⟨o, -, ho⟩ := mem_image.1 b.2
+    have hmarg : ∑ θ, P.joint θ o = 0 := by
+      refine le_antisymm (h ▸ sum_le_sum fun θ _ => ?_) (sum_nonneg fun θ _ => joint_nonneg hP θ o)
+      rw [toCanonical_joint]
+      exact mul_le_mul_of_nonneg_left (single_le_sum (fun o' _ => outProb_nonneg hP θ o')
+        (mem_filter.2 ⟨mem_univ o, ho⟩)) (hP.μ.1 θ)
+    rw [post_offPath h.symm, ← ho]
+    exact (post_offPath hmarg).symm
+  · -- on path: self-consistency of the canonical mechanism
+    ext θ
+    have hm : ∑ θ', P.μ θ' * P.canonical θ' b.1 ≠ 0 := by simpa [toCanonical_joint] using h.ne'
+    rw [post_onPath h.ne', toCanonical_joint]
+    simp only [toCanonical_joint]
+    rw [canonical_posterior hP θ b.1, mul_div_assoc, div_self hm, mul_one]
 
 /-- **The canonical play is outcome-equivalent**: each type gets the same distribution of
 (allocation, posterior) as under `σ` in the original play. -/

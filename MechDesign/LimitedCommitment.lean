@@ -2,6 +2,7 @@
 Copyright (c) 2026. Released under Apache 2.0 license.
 -/
 import MechDesign.DovalSkreta
+import Mathlib.Tactic.Linarith
 
 /-!
 # Limited commitment over many periods (Doval–Skreta 2022)
@@ -22,7 +23,9 @@ does better.
 **Theorem** (`canonical_isEquilibrium`): replacing every play by its canonical version, which
 asks for the type (or exit) and announces the posterior, is again an equilibrium with the same
 values, in which the agent reports truthfully (`canonical_truthful`) and announced beliefs are
-self-consistent (`DovalSkreta.Play.toCanonical_post`). The proof is the one-shot revelation
+self-consistent (`DovalSkreta.Play.toCanonical_post`). Moreover every deviation is matched by
+its canonical version (`AnyPlay.canonical_spec`), so only canonical deviations need checking,
+and exit really protects the agent (`outside_le_agentValue`). The proof is the one-shot revelation
 step of `DovalSkreta.lean`, applied period by period: relabelling changes no value, so the
 principal faces the same deviations as before.
 -/
@@ -87,6 +90,17 @@ lemma toCanonical_principalValue (hP : P.Valid) (V : (Θ → ℝ) → ℝ) :
     rw [show (P.toCanonical m₀).μ θ = P.μ θ from rfl,
       toCanonical_outcome_eq hP θ fun x β => E.uP θ x + V β]
 
+/-- Type `θ`'s value is its average payoff over the messages it sends. -/
+lemma agentValue_eq (W : Θ → (Θ → ℝ) → ℝ) (θ : Θ) :
+    P.agentValue E W θ = ∑ m, P.σ θ m * P.payoff (agentU E W) θ m := by
+  simp only [agentValue, payoff, agentU, outProb, sum_mul, mul_sum]
+  rw [sum_comm]; simp_rw [mul_assoc]
+
+/-- A best-responding agent does at least as well as with any single message. -/
+lemma payoff_le_agentValue (hP : P.Valid) {W : Θ → (Θ → ℝ) → ℝ} (hbr : P.BestResponds E W)
+    (θ : Θ) (m : M) : P.payoff (agentU E W) θ m ≤ P.agentValue E W θ := by
+  rw [agentValue_eq]; exact (hP.σ θ).le_wavg (hbr θ) m
+
 /-- The canonical play is a best response: only the truthful report is ever sent, and it is
 optimal. -/
 lemma toCanonical_bestResponds (hP : P.Valid) {W : Θ → (Θ → ℝ) → ℝ}
@@ -124,16 +138,33 @@ def IsEquilibrium (A : Assessment Θ X) (V : ℕ → (Θ → ℝ) → ℝ) (W : 
     ∀ Q : AnyPlay Θ X, Q.play.μ = β → Q.play.Valid → Q.OffersExit E →
       Q.play.BestResponds E (W (t + 1)) → Q.play.principalValue E (V (t + 1)) ≤ V t β
 
-/-- The canonical version of an assessment: in every period and belief, the canonical play,
-whose exit relabels the original exit. -/
+/-- The canonical version of a play: report a type or exit, and hear the posterior and the
+allocation. Its exit relabels the original exit. -/
+noncomputable def AnyPlay.canonical (Q : AnyPlay Θ X) : AnyPlay Θ X where
+  M := Option Θ
+  O := Q.play.outputs
+  optOut := none
+  play := Q.play.toCanonical Q.optOut
+
+/-- The canonical version of an assessment: in every period and belief, the canonical play. -/
 noncomputable def Assessment.canonical (A : Assessment Θ X) : Assessment Θ X :=
-  fun t β =>
-    { M := Option Θ
-      O := (A t β).play.outputs
-      optOut := none
-      play := (A t β).play.toCanonical (A t β).optOut }
+  fun t β => (A t β).canonical
 
 variable {E T}
+
+/-- **Canonical deviations suffice**: a valid play offering exit, with a best-responding
+agent, is matched by its canonical version. That version starts from the same prior, is valid,
+offers exit, is best-responded (truthfully, `canonical_truthful`) and gives both players the
+same values. So the principal's sequential rationality need only be checked against canonical
+mechanisms. -/
+theorem AnyPlay.canonical_spec {Q : AnyPlay Θ X} {V : (Θ → ℝ) → ℝ} {W : Θ → (Θ → ℝ) → ℝ}
+    (hQ : Q.play.Valid) (hx : Q.OffersExit E) (hbr : Q.play.BestResponds E W) :
+    Q.canonical.play.μ = Q.play.μ ∧ Q.canonical.play.Valid ∧ Q.canonical.OffersExit E ∧
+      Q.canonical.play.BestResponds E W ∧
+      Q.canonical.play.principalValue E V = Q.play.principalValue E V ∧
+      ∀ θ, Q.canonical.play.agentValue E W θ = Q.play.agentValue E W θ :=
+  ⟨rfl, Play.toCanonical_valid hQ, Play.toCanonical_exit hx, Play.toCanonical_bestResponds hQ hbr,
+    Play.toCanonical_principalValue hQ V, Play.toCanonical_agentValue hQ W⟩
 
 /-- **Canonical mechanisms are without loss under limited commitment** (Doval–Skreta 2022,
 Theorem 1, for belief-based assessments): the canonical version of an equilibrium is an
@@ -145,14 +176,34 @@ theorem canonical_isEquilibrium {A : Assessment Θ X} {V : ℕ → (Θ → ℝ) 
   obtain ⟨hμ, hP, hx, hbr, hV, hW, hseq⟩ := h t ht β hβ
   -- relabelling preserves validity, exit, best responses and every value; the principal's
   -- deviations are the same as before, so she is still sequentially rational
-  refine ⟨hμ, Play.toCanonical_valid hP, Play.toCanonical_exit hx,
-    Play.toCanonical_bestResponds hP hbr, ?_, fun θ => ?_, hseq⟩
-  · rw [hV]; exact (Play.toCanonical_principalValue hP _).symm
-  · rw [hW θ]; exact (Play.toCanonical_agentValue hP _ θ).symm
+  obtain ⟨hμ', hP', hx', hbr', hV', hW'⟩ := AnyPlay.canonical_spec (V := V (t + 1)) hP hx hbr
+  exact ⟨hμ'.trans hμ, hP', hx', hbr', hV.trans hV'.symm, fun θ => (hW θ).trans (hW' θ).symm,
+    hseq⟩
 
 /-- In the canonical assessment the agent reports truthfully. -/
 theorem canonical_truthful (A : Assessment Θ X) (t : ℕ) (β : Θ → ℝ) (θ : Θ) :
     (A.canonical t β).play.σ θ (some θ) = 1 := by
-  simp [Assessment.canonical, Play.toCanonical]
+  simp [Assessment.canonical, AnyPlay.canonical, Play.toCanonical]
+
+/-- **Exit protects the agent**: in equilibrium, with `k` periods to go, each type gets at
+least `k` times its outside flow payoff plus a lower bound `c` on its terminal values. -/
+theorem outside_le_agentValue {A : Assessment Θ X} {V : ℕ → (Θ → ℝ) → ℝ}
+    {W : ℕ → Θ → (Θ → ℝ) → ℝ} (h : IsEquilibrium E T A V W) (θ : Θ) {c : ℝ}
+    (hc : ∀ β, IsDist β → c ≤ W T θ β) :
+    ∀ k ≤ T, ∀ β, IsDist β → k * E.uA θ E.x₀ + c ≤ W (T - k) θ β := by
+  intro k
+  induction k with
+  | zero => intro _ β hβ; simpa using hc β hβ
+  | succ k ih =>
+    intro hk β hβ
+    obtain ⟨-, hP, hx, hbr, -, hW, -⟩ := h (T - (k + 1)) (by omega) β hβ
+    have hT : T - (k + 1) + 1 = T - k := by omega
+    rw [hW]
+    -- the agent's value is at least that of exiting, which yields `x₀` now and, from every
+    -- posterior (a belief), at least the bound for `k` periods
+    refine le_trans ?_ (Play.payoff_le_agentValue hP hbr θ (A _ β).optOut)
+    refine (hP.ζ _).le_wavg_of_support fun o ho => ?_
+    rw [Play.agentU, hx o ho, hT, Nat.cast_succ]
+    linarith [ih (by omega) _ (Play.post_isDist hP o)]
 
 end DovalSkreta

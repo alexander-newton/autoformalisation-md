@@ -17,7 +17,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | Uniqueness of the ironing a.e. | `Ironing.lean` | `Ironing.Ironed.ae_eq` |
 | **Bulow–Roberts (1989)**: the hull is the concave hull of the revenue curve | `RevenueCurve.lean` | `Ironing.hull_eq_concaveHull`, `fslope_hull_eq_slope` |
 | **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible`, `toCanonical_IC`, `toCanonical_exit` |
-| **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful` |
+| **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `outside_le_agentValue` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 
@@ -92,14 +92,14 @@ finite types, messages and allocations.
     payoff is unchanged (`canonical_outcome_eq`);
   * is self-consistent: announcing β induces posterior β (`canonical_posterior`);
   * is Bayes plausible (`canonical_bayesPlausible`).
-* **On-path posteriors are beliefs** (`post_isDist`): every outcome with positive total
-  probability induces a probability vector. An outcome reached only by zero-prior types
-  induces the junk "belief" 0; a full-support prior rules this out.
+* **Posteriors are beliefs** (`post_isDist`). On path the posterior is given by Bayes' rule.
+  After an outcome of probability zero, where Bayes' rule is silent, the principal keeps her
+  prior (`post_offPath`).
 * **The canonical play** (`toCanonical m₀`) keeps an exit option. The agent reports a type or
   exits; exiting relabels the original exit message `m₀`. Truth-telling beats both misreports
   and exit (`toCanonical_IC`); if `m₀` surely yields the outside allocation, so does exit
-  (`toCanonical_exit`); and announcing β induces posterior β, on and off path
-  (`toCanonical_post`).
+  (`toCanonical_exit`); and announcing β induces posterior β (`toCanonical_post`). Off path
+  this holds because both are the prior.
 
 ### Limited commitment over T periods
 A principal who cannot commit offers a mechanism in each of T periods to an agent with a
@@ -114,6 +114,11 @@ persistent private type. Each mechanism has an exit message giving the outside a
 * **Canonical mechanisms are without loss** (`canonical_isEquilibrium`). Replacing every play
   by its canonical play gives an equilibrium with the same values, in which every type reports
   truthfully (`canonical_truthful`) and announced beliefs are the principal's posteriors.
+* **Canonical deviations suffice** (`AnyPlay.canonical_spec`). Every admissible deviation is
+  matched by its canonical version, which is admissible too and gives both players the same
+  values. So sequential rationality need only be checked against canonical mechanisms.
+* **Exit protects the agent** (`outside_le_agentValue`). With k periods to go, each type gets
+  at least k times its outside flow payoff, plus a lower bound on its terminal values.
 
 ### Persuasion as a linear program
 With finitely many states and actions, Bayesian persuasion is a linear program over obedient
@@ -161,10 +166,15 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
   * Exit gives the outside allocation in the current period only; the game continues.
   * Mechanisms are finite, the horizon is finite (with arbitrary terminal values V T, W T),
     and there is no discounting (fold it into the flow payoffs).
-  * Continuation values are functions on all of `Θ → ℝ`, so they are also evaluated at the
-    junk off-path "belief" 0.
+  * Off-path beliefs are fixed to the prior rather than chosen freely, as PBE would allow.
+  * The principal uses pure strategies: one mechanism per period and belief, with no mixing.
   * The principal's deviations hold the continuation values fixed (a one-shot deviation at the
-    belief level).
+    belief level). Each deviation is judged under *every* best response of the agent, i.e. at
+    the principal-preferred one. Equilibria sustained by the agent breaking ties against a
+    deviating principal are excluded.
+  * The canonical output space is a finite set of (belief, allocation) pairs that depends on
+    the original play, not DS's fixed space Δ(Θ). Exit is a message of the mechanism rather
+    than a separate participation decision.
 * **Persuasion is the finite case.** It is finite states and actions, not Kolotilin's
   continuous-state model. The dual infimum is shown to equal the value but is not shown to be
   attained.
