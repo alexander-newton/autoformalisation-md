@@ -140,6 +140,29 @@ integrating `g f` over `[a, b]`. -/
 def HasDensity (ν : Measure ℝ) (f : ℝ → ℝ) (a b : ℝ) : Prop :=
   ∀ g, BddMeas g → ∫ x, g x ∂ν = ∫ x in a..b, g x * f x
 
+/-- The hypothesis is the expected one: the law with density `g` on `[a, b]` has density
+`g`. -/
+lemma hasDensity_withDensity {a b : ℝ} (hab : a ≤ b) {g : ℝ → ℝ} (hg : Continuous g)
+    (hpos : ∀ x ∈ Icc a b, 0 ≤ g x) :
+    HasDensity ((volume.restrict (Ioc a b)).withDensity fun x => ENNReal.ofReal (g x)) g a b := by
+  intro h _
+  rw [integral_withDensity_eq_integral_toReal_smul hg.measurable.ennreal_ofReal
+    (ae_of_all _ fun _ => ENNReal.ofReal_lt_top), intervalIntegral.integral_of_le hab]
+  refine setIntegral_congr_fun measurableSet_Ioc fun x hx => ?_
+  simp [ENNReal.toReal_ofReal (hpos x (Ioc_subset_Icc_self hx)), mul_comm]
+
+/-- ... and it is a probability measure when `∫ₐᵇ g = 1`. -/
+lemma isProbabilityMeasure_withDensity {a b : ℝ} (hab : a ≤ b) {g : ℝ → ℝ} (hg : Continuous g)
+    (hpos : ∀ x ∈ Icc a b, 0 ≤ g x) (h1 : ∫ x in a..b, g x = 1) :
+    IsProbabilityMeasure
+      ((volume.restrict (Ioc a b)).withDensity fun x => ENNReal.ofReal (g x)) := by
+  constructor
+  rw [withDensity_apply _ MeasurableSet.univ, Measure.restrict_univ,
+    ← ofReal_integral_eq_lintegral_ofReal (hg.integrableOn_Icc.mono_set Ioc_subset_Icc_self)
+      ((ae_restrict_iff' measurableSet_Ioc).2 (ae_of_all _ fun x hx => hpos x
+        (Ioc_subset_Icc_self hx))), ← intervalIntegral.integral_of_le hab, h1,
+    ENNReal.ofReal_one]
+
 /-- Myerson's **virtual value** `φ θ = θ - (1 - F θ) / f θ`, evaluated at `θ` clamped into
 `[a, b]` (types lie in `[a, b]`; clamping keeps `φ` bounded and measurable). -/
 noncomputable def virtualValue (f : ℝ → ℝ) (a b θ : ℝ) : ℝ :=
@@ -276,6 +299,288 @@ theorem revenue_le (P : Prior ν f a b) (hM : M.Regular) (hF : M.Feasible)
     ((bestVirtual_bddMeas P).integrable (μ := Measure.pi ν)) (sum_le_bestVirtual hF)
   linarith
 
+/-! ### Dominant-strategy incentive compatibility implies BIC -/
+
+/-- Bidder `i`'s view of the auction when the others' types are fixed at `θ`. -/
+def slice (M : Mechanism ι) (i : ι) (θ : ι → ℝ) : Myerson.Mech :=
+  ⟨fun s => M.q i (update θ i s), fun s => M.t i (update θ i s)⟩
+
+lemma slice_integrable (hM : M.Regular) (i : ι) (s' : ℝ) :
+    Integrable (fun θ => M.q i (update θ i s')) (Measure.pi ν) ∧
+      Integrable (fun θ => M.t i (update θ i s')) (Measure.pi ν) :=
+  ⟨BddMeas.integrable ⟨(hM i).1.1.comp (by fun_prop), (hM i).1.2.imp fun _ h θ => h _⟩,
+   BddMeas.integrable ⟨(hM i).2.1.comp (by fun_prop), (hM i).2.2.imp fun _ h θ => h _⟩⟩
+
+/-- The interim utility of a report is the average of the ex-post ones. -/
+lemma interim_util (hM : M.Regular) (i : ι) (s s' : ℝ) :
+    s * (M.interim ν i).q s' - (M.interim ν i).t s' =
+      ∫ θ, s * (M.slice i θ).q s' - (M.slice i θ).t s' ∂Measure.pi ν := by
+  obtain ⟨hq, ht⟩ := slice_integrable (ν := ν) hM i s'
+  change _ = ∫ θ, s * M.q i (update θ i s') - M.t i (update θ i s') ∂_
+  rw [integral_sub (hq.const_mul s) ht, integral_const_mul]; rfl
+
+/-- **DSIC ⇒ BIC**: if truth-telling is optimal against every profile of the others' types,
+it is optimal on average. -/
+lemma bic_of_dsic (hM : M.Regular) (h : ∀ i θ, (M.slice i θ).IC a b) : M.BIC ν a b := by
+  intro i s hs s' hs'
+  have int := fun s s' => let h := slice_integrable (ν := ν) hM i s'
+    (h.1.const_mul s).sub h.2
+  rw [interim_util hM, Myerson.Mech.U, interim_util hM]
+  exact integral_mono (int s s') (int s s) fun θ => h i θ s hs s' hs'
+
+/-- Likewise ex-post IR gives interim IR, and the interim utility of the lowest type is the
+average of the ex-post ones. -/
+lemma interim_U (hM : M.Regular) (i : ι) (s : ℝ) :
+    (M.interim ν i).U s = ∫ θ, (M.slice i θ).U s ∂Measure.pi ν :=
+  interim_util hM i s s
+
 end Mechanism
+
+/-! ### The highest-score auction -/
+
+section HighestScore
+
+open scoped Classical
+
+variable (φ : ι → ℝ → ℝ) (a b : ℝ)
+
+/-- Tie-breaking: a fixed enumeration of the bidders. -/
+noncomputable def rank (i : ι) : ℕ := Fintype.equivFin ι i
+
+/-- Bidder `i` wins at `θ`: its score is nonnegative and beats every other score, ties going
+to the lower rank. -/
+def Wins (θ : ι → ℝ) (i : ι) : Prop :=
+  0 ≤ φ i (θ i) ∧ ∀ j ≠ i, φ j (θ j) < φ i (θ i) ∨ (φ j (θ j) = φ i (θ i) ∧ rank i < rank j)
+
+/-- The best nonnegative score. -/
+noncomputable def topScore [Nonempty ι] (θ : ι → ℝ) : ℝ :=
+  max 0 (univ.sup' univ_nonempty fun i => φ i (θ i))
+
+/-- Clamp a report into `[a, b]`. -/
+def clamp (s : ℝ) : ℝ := max a (min s b)
+
+/-- The area under bidder `i`'s allocation curve up to its (clamped) report: the
+information rent of the envelope formula. -/
+noncomputable def area (i : ι) (θ : ι → ℝ) : ℝ :=
+  ∫ r in Ioc a (clamp a b (θ i)), (if Wins φ (update θ i r) i then 1 else 0)
+
+/-- **The highest-score auction**: the item goes to the winner, who pays the threshold
+payment `s q(s) - ∫ₐˢ q`, so that losers and the lowest type get zero utility. -/
+noncomputable def highestScore : Mechanism ι where
+  q i θ := if Wins φ θ i then 1 else 0
+  t i θ := clamp a b (θ i) * (if Wins φ θ i then 1 else 0) - area φ a b i θ
+
+variable {φ a b}
+
+lemma wins_unique {θ : ι → ℝ} {i j : ι} (hi : Wins φ θ i) (hj : Wins φ θ j) : i = j := by
+  by_contra hne
+  have hr : rank i ≠ rank j := fun h => hne ((Fintype.equivFin ι).injective (Fin.ext h))
+  rcases hi.2 j (Ne.symm hne) with h₁ | ⟨h₁, h₁'⟩ <;>
+    rcases hj.2 i hne with h₂ | ⟨h₂, h₂'⟩ <;> linarith
+
+lemma exists_wins [Nonempty ι] {θ : ι → ℝ} (h : 0 ≤ univ.sup' univ_nonempty fun i => φ i (θ i)) :
+    ∃ i, Wins φ θ i := by
+  obtain ⟨k, -, hk⟩ := exists_mem_eq_sup' univ_nonempty fun i => φ i (θ i)
+  set S := univ.filter fun j => φ j (θ j) = φ k (θ k)
+  obtain ⟨i, hiS, hi⟩ := S.exists_min_image rank ⟨k, by simp [S]⟩
+  have hi' : φ i (θ i) = φ k (θ k) := (mem_filter.1 hiS).2
+  refine ⟨i, by linarith, fun j hj => ?_⟩
+  have hjk : φ j (θ j) ≤ φ k (θ k) := hk ▸ le_sup' (fun i => φ i (θ i)) (mem_univ j)
+  rcases hjk.lt_or_eq with h' | h'
+  · exact Or.inl (by linarith)
+  · refine Or.inr ⟨by linarith, (hi j (by simp [S, h'])).lt_of_ne fun h => hj ?_⟩
+    exact ((Fintype.equivFin ι).injective (Fin.ext h)).symm
+
+/-- At most one bidder wins, so the sum over bidders picks out the winner (if any). -/
+lemma sum_wins (θ : ι → ℝ) (g : ι → ℝ) :
+    ∑ i, (if Wins φ θ i then 1 else 0) * g i = if h : ∃ i, Wins φ θ i then g h.choose else 0 := by
+  split_ifs with h
+  · rw [sum_eq_single h.choose (fun j _ hj => by
+      simp [show ¬Wins φ θ j from fun hw => hj (wins_unique hw h.choose_spec)]) (by simp)]
+    simp [h.choose_spec]
+  · push Not at h; simp [h]
+
+lemma highestScore_feasible : (highestScore φ a b).Feasible := fun θ => by
+  refine ⟨fun i => by simp only [highestScore]; split_ifs <;> norm_num, ?_⟩
+  have := sum_wins (φ := φ) θ fun _ => 1
+  simp only [mul_one] at this
+  simp only [highestScore, this]; split_ifs <;> norm_num
+
+/-- The highest-score auction earns, pointwise, the best nonnegative score. -/
+lemma highestScore_sum [Nonempty ι] (θ : ι → ℝ) :
+    ∑ i, (highestScore φ a b).q i θ * φ i (θ i) = topScore φ θ := by
+  simp only [highestScore, sum_wins θ fun i => φ i (θ i), topScore]
+  split_ifs with h
+  · have hw := h.choose_spec
+    refine (max_eq_right (hw.1.trans (le_sup' (fun i => φ i (θ i)) (mem_univ _)))).trans
+      (le_antisymm (sup'_le _ _ fun j _ => ?_) (le_sup' (fun i => φ i (θ i)) (mem_univ _))) |>.symm
+    by_cases hj : j = h.choose
+    · rw [hj]
+    · rcases hw.2 j hj with h' | ⟨h', -⟩ <;> linarith
+  · refine (max_eq_left ?_).symm
+    by_contra h'; exact h (exists_wins (not_le.1 h').le)
+
+/-- Raising one's own report never turns a win into a loss (scores are monotone). -/
+lemma wins_mono (hmono : ∀ i, Monotone (φ i)) {θ : ι → ℝ} {i : ι} {s s' : ℝ} (hss : s ≤ s')
+    (h : Wins φ (update θ i s) i) : Wins φ (update θ i s') i := by
+  have hφ : φ i s ≤ φ i s' := hmono i hss
+  simp only [Wins, update_self] at h ⊢
+  refine ⟨h.1.trans hφ, fun j hj => ?_⟩
+  have := h.2 j hj
+  simp only [update_of_ne hj] at this ⊢
+  rcases this with h' | ⟨h', h''⟩
+  · exact Or.inl (h'.trans_le hφ)
+  · rcases hφ.lt_or_eq with hlt | heq
+    · exact Or.inl (h' ▸ hlt)
+    · exact Or.inr ⟨h'.trans heq, h''⟩
+
+lemma clamp_of_mem {s : ℝ} (hs : s ∈ Icc a b) : clamp a b s = s := by
+  simp [clamp, min_eq_left hs.2, max_eq_right hs.1]
+
+/-- In each slice, utility is the area under the allocation curve. -/
+lemma highestScore_slice_U {i : ι} {θ : ι → ℝ} {s : ℝ} (hs : s ∈ Icc a b) :
+    ((highestScore φ a b).slice i θ).U s = ∫ r in a..s, ((highestScore φ a b).slice i θ).q r := by
+  simp only [Myerson.Mech.U, Mechanism.slice, highestScore, area, update_self, update_idem,
+    clamp_of_mem hs, intervalIntegral.integral_of_le hs.1]
+  rw [sub_sub_cancel]
+
+/-- **The highest-score auction is dominant-strategy IC and ex-post IR.** -/
+lemma highestScore_slice_IC_IR (hmono : ∀ i, Monotone (φ i)) (i : ι) (θ : ι → ℝ) :
+    ((highestScore φ a b).slice i θ).IC a b ∧ ((highestScore φ a b).slice i θ).IR a b := by
+  have hq : ∀ r, 0 ≤ ((highestScore φ a b).slice i θ).q r := fun r => by
+    simp only [Mechanism.slice, highestScore]; split_ifs <;> norm_num
+  refine ⟨Myerson.Mech.IC_iff.2 ⟨fun s _ s' _ hss => ?_, fun s hs => ?_⟩, fun s hs => ?_⟩
+  · simp only [Mechanism.slice, highestScore]
+    split_ifs with h h' <;> first | exact absurd (wins_mono hmono hss h) h' | norm_num
+  · have ha : a ∈ Icc a b := ⟨le_rfl, hs.1.trans hs.2⟩
+    rw [highestScore_slice_U hs, highestScore_slice_U ha, intervalIntegral.integral_same,
+      zero_add]
+  · rw [highestScore_slice_U hs]
+    exact intervalIntegral.integral_nonneg hs.1 fun r _ => hq r
+
+section MeasurableProp
+
+variable {α : Type*} [MeasurableSpace α] {f g : α → ℝ} (hf : Measurable f) (hg : Measurable g)
+include hf hg
+
+lemma measurable_le_prop : Measurable fun x => f x ≤ g x :=
+  measurableSet_setOfPred.1 (measurableSet_le hf hg)
+lemma measurable_lt_prop : Measurable fun x => f x < g x :=
+  measurableSet_setOfPred.1 (measurableSet_lt hf hg)
+lemma measurable_eq_prop : Measurable fun x => f x = g x :=
+  measurableSet_setOfPred.1 (measurableSet_eq_fun hf hg)
+
+end MeasurableProp
+
+lemma measurable_wins (hφ : ∀ i, Measurable (φ i)) (i : ι) :
+    Measurable fun θ : ι → ℝ => Wins φ θ i := by
+  have hm : ∀ j, Measurable fun θ : ι → ℝ => φ j (θ j) := fun j => (hφ j).comp (by fun_prop)
+  exact (measurable_le_prop measurable_const (hm i)).and (Measurable.forall fun j =>
+    measurable_const.imp ((measurable_lt_prop (hm j) (hm i)).or
+      ((measurable_eq_prop (hm j) (hm i)).and measurable_const)))
+
+lemma abs_clamp_le (s : ℝ) : |clamp a b s| ≤ |a| + |b| := by
+  have h₁ : a ≤ clamp a b s := le_max_left _ _
+  have h₂ : clamp a b s ≤ max a b := max_le_max le_rfl (min_le_right _ _)
+  rw [abs_le]; constructor <;> cases max_cases a b <;>
+    linarith [neg_abs_le a, le_abs_self a, neg_abs_le b, le_abs_self b, abs_nonneg a, abs_nonneg b]
+
+lemma measurable_area (hφ : ∀ i, Measurable (φ i)) (i : ι) : Measurable (area φ a b i) := by
+  -- the area is an integral of a jointly measurable function of `(θ, r)`
+  set F : (ι → ℝ) × ℝ → ℝ := fun p =>
+    if (a < p.2 ∧ p.2 ≤ clamp a b (p.1 i)) ∧ Wins φ (update p.1 i p.2) i then 1 else 0
+  have hc : Measurable fun p : (ι → ℝ) × ℝ => clamp a b (p.1 i) := by unfold clamp; fun_prop
+  have hF : Measurable F := Measurable.ite (((measurable_lt_prop measurable_const
+    measurable_snd).and (measurable_le_prop measurable_snd hc)).and
+    ((measurable_wins hφ i).comp (by fun_prop))).setOf measurable_const measurable_const
+  have : area φ a b i = fun θ => ∫ r, F (θ, r) := by
+    ext θ
+    rw [area, ← integral_indicator measurableSet_Ioc]
+    congr 1; ext r
+    simp only [Set.indicator, Set.mem_Ioc, F]
+    split_ifs <;> tauto
+  exact this ▸ (hF.stronglyMeasurable.integral_prod_right' (ν := volume)).measurable
+
+/-- The area is at most the length of `[a, clamp θᵢ]`. -/
+lemma abs_area_le (i : ι) (θ : ι → ℝ) : |area φ a b i θ| ≤ 2 * (|a| + |b|) := by
+  have h := norm_setIntegral_le_of_norm_le_const (C := 1) (μ := volume) measure_Ioc_lt_top
+    (s := Ioc a (clamp a b (θ i))) (f := fun r => if Wins φ (update θ i r) i then (1 : ℝ) else 0)
+    fun r _ => by split_ifs <;> norm_num
+  have hac : a ≤ clamp a b (θ i) := le_max_left _ _
+  have hc := abs_le.1 (abs_clamp_le (a := a) (b := b) (θ i))
+  rw [Real.norm_eq_abs, one_mul, Real.volume_real_Ioc_of_le hac] at h
+  rw [area]; linarith [hc.2, neg_abs_le a, abs_nonneg b]
+
+/-- The highest-score auction is regular: allocations and payments are bounded and
+measurable. -/
+lemma highestScore_regular (hφ : ∀ i, Measurable (φ i)) : (highestScore φ a b).Regular := by
+  intro i
+  have hq : BddMeas fun θ => (highestScore φ a b).q i θ :=
+    ⟨Measurable.ite (measurable_wins hφ i).setOf measurable_const measurable_const,
+      1, fun θ => by simp only [highestScore]; split_ifs <;> norm_num⟩
+  have hc : Measurable fun θ : ι → ℝ => clamp a b (θ i) := by unfold clamp; fun_prop
+  refine ⟨hq, (hc.mul hq.1).sub (measurable_area hφ i), |a| + |b| + 2 * (|a| + |b|),
+    fun θ => (abs_sub _ _).trans (add_le_add ?_ (abs_area_le i θ))⟩
+  have := abs_clamp_le (a := a) (b := b) (θ i)
+  split_ifs <;> simp [this]; positivity
+
+lemma clamp_mem (hab : a ≤ b) (s : ℝ) : clamp a b s ∈ Icc a b :=
+  ⟨le_max_left _ _, max_le hab (min_le_right _ _)⟩
+
+lemma clamp_mono : Monotone (clamp a b) := fun _ _ h => max_le_max le_rfl (min_le_min_right b h)
+
+/-- Regularity on `[a, b]` makes the (clamped) virtual value monotone everywhere. -/
+lemma virtualValue_monotone (hab : a ≤ b) {g : ℝ → ℝ}
+    (hreg : MonotoneOn (virtualValue g a b) (Icc a b)) : Monotone (virtualValue g a b) := by
+  have e : ∀ z, virtualValue g a b z = virtualValue g a b (clamp a b z) := fun z => by
+    change _ = Myerson.J g a (clamp a b (clamp a b z)) / g (clamp a b (clamp a b z))
+    rw [clamp_of_mem (clamp_mem hab z)]; rfl
+  exact fun x y hxy => by
+    rw [e x, e y]; exact hreg (clamp_mem hab x) (clamp_mem hab y) (clamp_mono hxy)
+
+end HighestScore
+
+/-! ### Myerson's optimal auction -/
+
+variable (f a b) in
+/-- **The Myerson auction**: highest nonnegative virtual value wins, at the threshold price. -/
+noncomputable def myersonAuction : Mechanism ι :=
+  highestScore (fun i => virtualValue (f i) a b) a b
+
+variable [Nonempty ι] {ν}
+
+/-- **Myerson's optimal auction** (1981). Under regularity (virtual values nondecreasing),
+the auction that awards the item to the highest nonnegative virtual value, at the threshold
+price, is regular, feasible, BIC and interim IR, and earns at least as much as any other
+such auction. -/
+theorem myerson_optimal (P : Prior ν f a b)
+    (hreg : ∀ i, MonotoneOn (virtualValue (f i) a b) (Icc a b)) :
+    let A := myersonAuction a b f
+    A.Regular ∧ A.Feasible ∧ A.BIC ν a b ∧ (∀ i, (A.interim ν i).IR a b) ∧
+      ∀ M : Mechanism ι, M.Regular → M.Feasible → M.BIC ν a b →
+        (∀ i, (M.interim ν i).IR a b) → M.revenue ν ≤ A.revenue ν := by
+  intro A
+  unfold A myersonAuction
+  set φ := fun i => virtualValue (f i) a b
+  have hmono i := virtualValue_monotone P.hab (hreg i)
+  have hA : (highestScore φ a b).Regular := highestScore_regular fun i =>
+    (P.virtualValue_bddMeas' i).1
+  -- dominant-strategy IC, hence BIC
+  have hIC : (highestScore φ a b).BIC ν a b :=
+    Mechanism.bic_of_dsic hA fun i θ => (highestScore_slice_IC_IR hmono i θ).1
+  -- ex-post IR, hence interim IR, and the lowest type gets nothing
+  have hU : ∀ i s, s ∈ Icc a b →
+      0 ≤ ((highestScore φ a b).interim ν i).U s ∧ ((highestScore φ a b).interim ν i).U a = 0 :=
+    fun i s hs => by
+    have ha : a ∈ Icc a b := ⟨le_rfl, P.hab⟩
+    rw [Mechanism.interim_U hA, Mechanism.interim_U hA]
+    refine ⟨integral_nonneg fun θ => (highestScore_slice_IC_IR hmono i θ).2 s hs, ?_⟩
+    simp [highestScore_slice_U ha]
+  -- its revenue is Myerson's bound
+  refine ⟨hA, highestScore_feasible, hIC, fun i s hs => (hU i s hs).1,
+    fun M hM hF hMIC hIR => (Mechanism.revenue_le P hM hF hMIC hIR).trans_eq ?_⟩
+  rw [Mechanism.revenue_eq P hA hIC, sum_eq_zero fun i _ => (hU i a ⟨le_rfl, P.hab⟩).2,
+    sub_zero]
+  exact integral_congr_ae (ae_of_all _ fun θ => (highestScore_sum θ).symm)
 
 end Auction

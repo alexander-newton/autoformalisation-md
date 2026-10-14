@@ -52,7 +52,8 @@ variable {μ v w}
 lemma obj_apply (x : A × Θ → ℝ) : obj v x = ∑ a, ∑ θ, x (a, θ) * v a θ := by
   simp [obj, Fintype.sum_prod_type, mul_comm]
 
-lemma obed_apply (x : A × Θ → ℝ) (p : A × A) : obed w p x = ∑ θ, x (p.1, θ) * (w p.1 θ - w p.2 θ) := by
+lemma obed_apply (x : A × Θ → ℝ) (p : A × A) :
+    obed w p x = ∑ θ, x (p.1, θ) * (w p.1 θ - w p.2 θ) := by
   simp [obed, mul_comm]
 
 lemma pure_mem (hμ : 0 ≤ μ) (s : Θ → A) : pure μ s ∈ Schemes μ :=

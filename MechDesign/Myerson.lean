@@ -202,7 +202,8 @@ lemma J_eq_virtualValue_mul {θ : ℝ} (hf : f θ ≠ 0) :
 lemma J_continuousOn (hab : a ≤ b) (hf : ContinuousOn f (Icc a b)) :
     ContinuousOn (J f a) [[a, b]] := by
   rw [uIcc_of_le hab]
-  have hF := continuousOn_primitive_interval' (hf.intervalIntegrable_of_Icc (μ := volume) hab) left_mem_uIcc
+  have hF := continuousOn_primitive_interval' (hf.intervalIntegrable_of_Icc (μ := volume) hab)
+    left_mem_uIcc
   exact (continuousOn_id.mul hf).sub (continuousOn_const.sub (uIcc_of_le hab ▸ hF))
 
 variable {m : Mech}
