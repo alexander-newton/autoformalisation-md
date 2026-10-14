@@ -12,7 +12,8 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Myerson (1981)**: Myerson's lemma, revenue equivalence | `Myerson.lean` | `Myerson.Mech.IC_iff`, `Mech.IC.envelope`, `Mech.revenue_equivalence` |
 | Revenue = virtual surplus; posted price optimal under regularity | `Myerson.lean` | `Myerson.revenue_eq_virtualSurplus`, `revenue_le`, `postedPrice_optimal` |
 | **Riley–Zeckhauser (1983)**: posted prices optimal for any continuous density | `Ironing.lean` | `Ironing.exists_postedPrice_optimal`, `revenue_postedPrice` |
-| **Myerson (1981)**: optimal auction, n bidders, with **ironing** | `Ironing.lean`, `Auction.lean` | `Auction.ironed_optimal`, `Auction.myerson_optimal`, `Mechanism.revenue_le` |
+| **Myerson (1981)**: optimal auction, n bidders, **any prior** (ironing) | `Hull.lean`, `Ironing.lean`, `Auction.lean` | `Auction.exists_optimal_auction`, `ironed_optimal`, `myerson_optimal` |
+| Existence of ironings (convex hull in quantile coordinates) | `Hull.lean` | `Ironing.exists_ironed` |
 | **Doval–Skreta (2022)**: the revelation step behind canonical mechanisms | `DovalSkreta.lean` | `Play.canonical_IC`, `canonical_outcome_eq`, `canonical_posterior`, `canonical_bayesPlausible` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
@@ -47,6 +48,16 @@ A single buyer has a value θ ∈ [a, b] and quasilinear utility θq − t.
 * **The ironed auction is optimal** (`ironed_optimal`). The highest nonnegative ironed virtual
   value wins, at the threshold price. The regular case is a corollary (`myerson_optimal`),
   since a monotone virtual value irons itself with zero gap (`ironed_virtualValue`).
+* **Every density admits an ironing** (`exists_ironed`). Measure types by their quantile F
+  and call a function *F-convex* if it is convex in that coordinate.
+  * The ironed revenue curve Ĝ is the largest F-convex function below G(p) = ∫ₐᵖ J, and φ̄
+    is its right F-slope.
+  * φ̄ is monotone and bounded (three-chord lemma), and Ĝ(p) = ∫ₐᵖ φ̄ f by a weighted
+    version of the `Supports` lemma (`FSupports.sub_eq`).
+  * Where Ĝ < G, a short chord still lies below G, so maximality forces Ĝ to be that chord,
+    and φ̄ is flat there (`HullSetting.flat`).
+* **Myerson's optimal auction exists for every prior** (`exists_optimal_auction`): no
+  regularity assumption and no assumed ironing.
 
 ### Myerson's auction: the n-bidder machinery
 * **Interim rules.** Bidder i's *interim* rule averages its allocation and payment over the
@@ -98,10 +109,11 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
   ex-post payments are excluded.
 * **Clamped virtual values.** Virtual values are evaluated at the type clamped into [a, b].
   Types lie in [a, b] almost surely, so this is harmless.
-* **Ironing is assumed, not constructed.** `ironed_optimal` takes an ironing φ̄ as a
-  hypothesis (`Ironed`). Existence of the ironing, via the concave hull of the revenue
-  curve (equivalently the convex hull of H(q) = ∫₀^q φ(F⁻¹(r)) dr), is not yet formalised. In the regular case it is proved
-  (`ironed_virtualValue`).
+* **The ironing is built in type space.** `exists_ironed` builds the hull directly in type
+  space, with convexity measured by the quantile F; this is equivalent to the convex hull of
+  H(q) = ∫₀^q φ(F⁻¹(r)) dr, i.e. the concave hull of the revenue curve. The equivalence is
+  argued on paper, not formalised. `Ironed` asks for a bounded measurable φ̄, not a continuous
+  one: the proofs never use continuity.
 * **Doval–Skreta is the one-shot step only.** Sequential rationality, participation and
   multiple periods are not modelled. Instead, the continuation is assumed to depend on the
   outcome only through (allocation, posterior). In DS, different outcomes with the same
@@ -132,6 +144,5 @@ lake build
 Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
-* Existence of ironings: the concave hull of the revenue curve.
 * The multi-period Doval–Skreta model and the Coasian dynamics.
 * Continuous-state persuasion duality (Dworczak–Kolotilin), using convex price functions.

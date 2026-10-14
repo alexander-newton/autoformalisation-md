@@ -86,7 +86,7 @@ lemma integral_level_mul (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b)) (s : ℝ)
 /-- **A monotone allocation is an average of thresholds** (the layer-cake identity):
 `∫ₐᵇ Q g = ∫₀¹ ∫_{p(s)}^b g ds`, where `p(s)` is the threshold of level `s`. -/
 theorem integral_mul_eq_threshold (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b))
-    (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) (hg : ContinuousOn g (Icc a b)) :
+    (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) (hg : IntervalIntegrable g volume a b) :
     ∫ θ in a..b, Q θ * g θ = ∫ s in (0 : ℝ)..1, ∫ θ in threshold Q a b s..b, g θ := by
   -- extend `Q` monotonically to `ℝ`, to make it measurable
   set Q' : ℝ → ℝ := fun θ => Q (projIcc a b hab θ)
@@ -97,13 +97,13 @@ theorem integral_mul_eq_threshold (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b))
     unfold threshold; congr 2; ext θ; exact and_congr_right fun hθ => by rw [hQQ' θ hθ]
   -- the integrand of the swapped integral is integrable on the product
   have hgi : Integrable g (volume.restrict (Ioc a b)) :=
-    (hg.integrableOn_Icc).mono_set Ioc_subset_Icc_self
+    (intervalIntegrable_iff_integrableOn_Ioc_of_le hab).1 hg
   have hint : Integrable (Function.uncurry fun θ s => (if s ≤ Q' θ then (1 : ℝ) else 0) * g θ)
       ((volume.restrict (Ioc a b)).prod (volume.restrict (Ioc (0 : ℝ) 1))) := by
     refine (hgi.norm.mul_prod (integrable_const (1 : ℝ))).mono' ?_ (ae_of_all _ fun z => ?_)
     · exact (Measurable.ite (measurableSet_le measurable_snd (hQ'm.measurable.comp
         measurable_fst)) measurable_const measurable_const).aestronglyMeasurable.mul
-        ((hg.mono Ioc_subset_Icc_self).aestronglyMeasurable measurableSet_Ioc).comp_fst
+        hgi.aestronglyMeasurable.comp_fst
     · change ‖(if z.2 ≤ Q' z.1 then (1 : ℝ) else 0) * g z.1‖ ≤ ‖g z.1‖ * 1
       rw [norm_mul]; split_ifs <;> simp
   calc ∫ θ in a..b, Q θ * g θ
@@ -121,11 +121,12 @@ theorem integral_mul_eq_threshold (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b))
 
 /-- The tail integral `p ↦ ∫ₚᵇ g`, read off at the thresholds, is integrable in the level. -/
 lemma intervalIntegrable_tail_threshold (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b))
-    (hg : ContinuousOn g (Icc a b)) :
+    (hg : IntervalIntegrable g volume a b) :
     IntervalIntegrable (fun s => ∫ θ in threshold Q a b s..b, g θ) volume 0 1 := by
   have hT : ContinuousOn (fun p => ∫ θ in p..b, g θ) (Icc a b) := by
     have := continuousOn_primitive_interval_left (μ := volume) (f := g) (a := a) (b := b)
-      (by rw [uIcc_of_le hab]; exact hg.integrableOn_Icc)
+      (by rw [uIcc_of_le hab, integrableOn_Icc_iff_integrableOn_Ioc]
+          exact (intervalIntegrable_iff_integrableOn_Ioc_of_le hab).1 hg)
     rwa [uIcc_of_le hab] at this
   obtain ⟨M, hM⟩ := isCompact_Icc.exists_bound_of_continuousOn hT
   -- the threshold is monotone in the level, hence measurable
@@ -141,7 +142,7 @@ lemma intervalIntegrable_tail_threshold (hab : a ≤ b) (hQ : MonotoneOn Q (Icc 
 /-- **An average of thresholds is bounded by the best threshold**: if every tail integral
 `∫ₚᵇ g` is at most `C`, so is `∫ₐᵇ Q g`. -/
 theorem integral_mul_le (hab : a ≤ b) (hQ : MonotoneOn Q (Icc a b))
-    (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) (hg : ContinuousOn g (Icc a b)) {C : ℝ}
+    (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) (hg : IntervalIntegrable g volume a b) {C : ℝ}
     (hC : ∀ p ∈ Icc a b, ∫ θ in p..b, g θ ≤ C) : ∫ θ in a..b, Q θ * g θ ≤ C := by
   rw [integral_mul_eq_threshold hab hQ h01 hg]
   calc _ ≤ ∫ _ in (0 : ℝ)..1, C := integral_mono_on zero_le_one
@@ -172,7 +173,7 @@ lemma monotone_step (p : ℝ) : Monotone fun θ : ℝ => if p ≤ θ then (1 : �
     dsimp only; split_ifs with h₁ h₂ <;> first | exact absurd (h₁.trans h) h₂ | norm_num
 
 /-- **A threshold rule integrates the tail**: `∫ₐᵇ 1[θ ≥ p] g = ∫ₚᵇ g`. -/
-lemma integral_step_mul {p : ℝ} (hp : p ∈ Icc a b) (hg : ContinuousOn g (Icc a b)) :
+lemma integral_step_mul {p : ℝ} (hp : p ∈ Icc a b) (hg : IntervalIntegrable g volume a b) :
     ∫ θ in a..b, (if p ≤ θ then 1 else 0) * g θ = ∫ θ in p..b, g θ := by
   have hab := hp.1.trans hp.2
   rw [integral_mul_eq_threshold hab ((monotone_step p).monotoneOn _)
@@ -194,7 +195,8 @@ theorem revenue_postedPrice {p : ℝ} (hp : p ∈ Icc a b) (hf : ContinuousOn f 
       = ∫ θ in a..b, (if p ≤ θ then 1 else 0) * (p * f θ) :=
         integral_congr fun θ _ => by simp only [postedPrice]; split_ifs <;> ring
     _ = p * (1 - cdf f a p) := by
-        rw [integral_step_mul (g := fun θ => p * f θ) hp (continuousOn_const.mul hf),
+        rw [integral_step_mul (g := fun θ => p * f θ) hp
+            ((continuousOn_const.mul hf).intervalIntegrable_of_Icc hab),
           intervalIntegral.integral_const_mul, cdf,
           ← hF, integral_interval_sub_left hfi (hfi.mono_set (by
             rw [uIcc_of_le hab, uIcc_of_le hp.1]; exact Icc_subset_Icc_right hp.2))]
@@ -205,7 +207,7 @@ lemma tail_J_eq {p : ℝ} (hp : p ∈ Icc a b) (hf : ContinuousOn f (Icc a b))
   have hab := hp.1.trans hp.2
   rw [revenue_eq_virtualSurplus hab hf hF (postedPrice_IC p), postedPrice_U,
     max_eq_right (by linarith [hp.1]), sub_zero, ← integral_step_mul hp
-      ((J_continuousOn hab hf).mono (by rw [uIcc_of_le hab]))]
+      (J_continuousOn hab hf).intervalIntegrable]
   rfl
 
 /-- **Posted prices are optimal for any continuous density** (Riley–Zeckhauser 1983; the
@@ -227,7 +229,8 @@ theorem exists_postedPrice_optimal (hab : a ≤ b) (hf : ContinuousOn f (Icc a b
   refine ⟨p, hp, fun m hIC hIR hq => ?_⟩
   -- an IC allocation is an average of thresholds, each worth at most the best price
   rw [revenue_eq_virtualSurplus hab hf hF hIC, ← tail_J_eq hp hf hF]
-  have := integral_mul_le hab hIC.monotoneOn hq hJ fun p' hp' => hmax hp'
+  have := integral_mul_le hab hIC.monotoneOn hq (hJ.intervalIntegrable_of_Icc hab)
+    fun p' hp' => hmax hp'
   linarith [hIR a ⟨le_rfl, hab⟩]
 
 /-! ### Ironed virtual values -/
@@ -247,32 +250,35 @@ it irons itself with zero gap: `ironed_virtualValue`.) -/
 structure Ironed (f : ℝ → ℝ) (a b : ℝ) (φ : ℝ → ℝ) : Prop where
   mono : Monotone φ
   bddMeas : Auction.BddMeas φ
-  cont : ContinuousOn φ (Icc a b)
   gap_nonneg : ∀ p ∈ Icc a b, 0 ≤ gap f a φ p
   gap_right : gap f a φ b = 0
   flat : ∀ p ∈ Ioo a b, 0 < gap f a φ p → ∃ ε > 0, ∀ x ∈ Ioo (p - ε) (p + ε), φ x = φ p
 
-lemma gap_integrand_continuousOn (hab : a ≤ b) (hI : Ironed f a b φ)
-    (hf : ContinuousOn f (Icc a b)) : ContinuousOn (fun θ => J f a θ - φ θ * f θ) (Icc a b) := by
-  have hJ : ContinuousOn (J f a) (Icc a b) := by simpa [uIcc_of_le hab] using J_continuousOn hab hf
-  exact hJ.sub (hI.cont.mul hf)
+lemma gap_integrand_intervalIntegrable (hab : a ≤ b) (hI : Ironed f a b φ)
+    (hf : ContinuousOn f (Icc a b)) {x y : ℝ} (hx : x ∈ Icc a b) (hy : y ∈ Icc a b) :
+    IntervalIntegrable (fun θ => J f a θ - φ θ * f θ) volume x y := by
+  have hs : uIcc x y ⊆ uIcc a b := by rw [uIcc_of_le hab]; exact uIcc_subset_Icc hx hy
+  exact ((J_continuousOn hab hf).mono hs).intervalIntegrable.sub
+    ((hI.bddMeas.intervalIntegrable x y).mul_continuousOn (hf.mono (hs.trans (uIcc_of_le hab).le)))
+
+lemma gap_integrand_ab (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b)) :
+    IntervalIntegrable (fun θ => J f a θ - φ θ * f θ) volume a b :=
+  gap_integrand_intervalIntegrable hab hI hf ⟨le_rfl, hab⟩ ⟨hab, le_rfl⟩
 
 /-- The tail of the gap integrand is minus the gap. -/
 lemma tail_gap (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b)) {p : ℝ}
     (hp : p ∈ Icc a b) : ∫ θ in p..b, (J f a θ - φ θ * f θ) = -gap f a φ p := by
   have hab := hp.1.trans hp.2
-  have hg := gap_integrand_continuousOn hab hI hf
-  have hi : ∀ x ∈ Icc a b, IntervalIntegrable (fun θ => J f a θ - φ θ * f θ) volume a x :=
-    fun x hx => (hg.mono (by rw [uIcc_of_le hx.1]; exact Icc_subset_Icc_right hx.2))
-      |>.intervalIntegrable
-  rw [← integral_interval_sub_left (hi b ⟨hab, le_rfl⟩) (hi p hp)]
+  have hi := fun {y} (hy : y ∈ Icc a b) =>
+    gap_integrand_intervalIntegrable hab hI hf ⟨le_rfl, hab⟩ hy
+  rw [← integral_interval_sub_left (hi ⟨hab, le_rfl⟩) (hi hp)]
   simp [gap, ← hI.gap_right]
 
 /-- **Ironing only costs revenue**: for a monotone allocation, `∫ Q (J - φ f) ≤ 0`. -/
 lemma gapTerm_nonpos (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn f (Icc a b))
     (hQ : MonotoneOn Q (Icc a b)) (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1) :
     ∫ θ in a..b, Q θ * (J f a θ - φ θ * f θ) ≤ 0 :=
-  integral_mul_le hab hQ h01 (gap_integrand_continuousOn hab hI hf) fun p hp => by
+  integral_mul_le hab hQ h01 (gap_integrand_ab hab hI hf) fun p hp => by
     rw [tail_gap hI hf hp]; linarith [hI.gap_nonneg p hp]
 
 /-- **Complementary slackness**: if `Q` depends on the type only through `φ`, the gap costs
@@ -281,7 +287,7 @@ lemma gapTerm_eq_zero (hab : a ≤ b) (hI : Ironed f a b φ) (hf : ContinuousOn 
     (hQ : MonotoneOn Q (Icc a b)) (h01 : ∀ θ ∈ Icc a b, Q θ ∈ Icc (0 : ℝ) 1)
     (hfac : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, φ x = φ y → Q x = Q y) :
     ∫ θ in a..b, Q θ * (J f a θ - φ θ * f θ) = 0 := by
-  rw [integral_mul_eq_threshold hab hQ h01 (gap_integrand_continuousOn hab hI hf)]
+  rw [integral_mul_eq_threshold hab hQ h01 (gap_integrand_ab hab hI hf)]
   refine (integral_congr_ae (g := fun _ => 0) (ae_of_all _ fun s hs => ?_)).trans (by simp)
   rw [uIoc_of_le zero_le_one] at hs
   have hp := threshold_mem (Q := Q) (s := s) hab
@@ -386,13 +392,9 @@ lemma ironed_virtualValue (P : Prior ν f a b) (i : ι)
       rw [uIcc_of_le hp.1] at hθ
       have hθ' : θ ∈ Icc a b := ⟨hθ.1, hθ.2.trans hp.2⟩
       simp [J_eq_virtualValue_mul hθ' (P.pos i θ hθ').ne']).trans intervalIntegral.integral_zero
-  have hJ : ContinuousOn (Myerson.J (f i) a) (Icc a b) := by
-    simpa [uIcc_of_le hab] using Myerson.J_continuousOn hab (P.cont i).continuousOn
-  refine ⟨virtualValue_monotone hab hreg, P.virtualValue_bddMeas' i,
-    (hJ.div (P.cont i).continuousOn fun θ hθ => (P.pos i θ hθ).ne').congr fun θ hθ => ?_,
-    fun p hp => (hgap p hp).ge, hgap b ⟨hab, le_rfl⟩, fun p hp hpos => ?_⟩
-  · simp [virtualValue, min_eq_left hθ.2, max_eq_right hθ.1]
-  · exact absurd (hgap p (Ioo_subset_Icc_self hp)) hpos.ne'
+  exact ⟨virtualValue_monotone hab hreg, P.virtualValue_bddMeas' i,
+    fun p hp => (hgap p hp).ge, hgap b ⟨hab, le_rfl⟩,
+    fun p hp hpos => absurd (hgap p (Ioo_subset_Icc_self hp)) hpos.ne'⟩
 
 variable (a b f) in
 /-- **The Myerson auction**: highest nonnegative virtual value wins, at the threshold price. -/

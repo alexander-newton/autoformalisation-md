@@ -64,37 +64,59 @@ lemma _root_.MonotoneOn.supports_integral (hf : MonotoneOn f (Icc a b)) :
   · simpa [mul_comm] using integral_mono_on hxy (hi hx hy) intervalIntegrable_const
       fun t ht => hf (hs ht) hy ht.2
 
-/-- **Two functions supported by the same `f` differ by a constant.** On a uniform partition
-of `[a, b]` into `n` pieces the difference changes by at most `(f b - f a)(b - a)/n`. -/
-lemma Supports.sub_eq (hV : Supports f V (Icc a b)) (hW : Supports f W (Icc a b)) (hab : a ≤ b) :
-    V b - V a = W b - W a := by
+/-- `f` **`F`-supports** `V` on `s`: like `Supports`, with lengths measured by `F`. (Myerson's
+lemma uses `F = id`; ironing measures types by their quantile `F`.) -/
+def FSupports (F f V : ℝ → ℝ) (s : Set ℝ) : Prop :=
+  ∀ x ∈ s, ∀ y ∈ s, x ≤ y →
+    (F y - F x) * f x ≤ V y - V x ∧ V y - V x ≤ (F y - F x) * f y
+
+/-- **Two functions `F`-supported by the same `f` differ by a constant.** Cut `[a, b]` into
+`n` pieces of equal `F`-length (by the intermediate value theorem); on each piece the
+difference changes by at most `(f y - f x)(F b - F a)/n`, and these telescope. -/
+lemma FSupports.sub_eq {F : ℝ → ℝ} (hF : StrictMonoOn F (Icc a b))
+    (hFc : ContinuousOn F (Icc a b)) (hV : FSupports F f V (Icc a b))
+    (hW : FSupports F f W (Icc a b)) (hab : a ≤ b) : V b - V a = W b - W a := by
+  rcases hab.eq_or_lt with rfl | hab
+  · simp
   set d := fun x => V x - W x
-  have hd : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, x ≤ y → |d y - d x| ≤ (f y - f x) * (y - x) := by
+  have hd : ∀ x ∈ Icc a b, ∀ y ∈ Icc a b, x ≤ y → |d y - d x| ≤ (f y - f x) * (F y - F x) := by
     intro x hx y hy hxy
     obtain ⟨h₁, h₂⟩ := hV x hx y hy hxy; obtain ⟨h₃, h₄⟩ := hW x hx y hy hxy
     rw [abs_le]; constructor <;> nlinarith
-  have key : ∀ n : ℕ, 1 ≤ n → |d b - d a| ≤ (f b - f a) * (b - a) / n := by
+  have hFab : F a < F b := hF ⟨le_rfl, hab.le⟩ ⟨hab.le, le_rfl⟩ hab
+  have key : ∀ n : ℕ, 1 ≤ n → |d b - d a| ≤ (f b - f a) * (F b - F a) / n := by
     intro n hn
     have hn : (0 : ℝ) < n := by exact_mod_cast hn
-    set h := (b - a) / n
-    have hnh : n * h = b - a := by simp only [h]; field_simp
-    have h0 : 0 ≤ h := div_nonneg (by linarith) hn.le
-    set p : ℕ → ℝ := fun i => a + i * h
-    have hp : ∀ i ≤ n, p i ∈ Icc a b := fun i hi => by
-      have : (i : ℝ) * h ≤ n * h := by gcongr
-      exact ⟨show a ≤ a + i * h by nlinarith, show a + i * h ≤ b by linarith⟩
-    have hpn : p n = b := by simp only [p]; linarith
+    set h := (F b - F a) / n
+    have hnh : n * h = F b - F a := by simp only [h]; field_simp
+    have h0 : 0 < h := div_pos (by linarith) hn
+    -- grid points with equally spaced `F`-values
+    have hgrid : ∀ i : ℕ, ∃ p ∈ Icc a b, F p = F a + min i n * h := fun i => by
+      have : ((min i n : ℕ) : ℝ) * h ≤ n * h := by gcongr; exact_mod_cast min_le_right i n
+      have h0' : (0 : ℝ) ≤ ((min i n : ℕ) : ℝ) * h := by positivity
+      exact intermediate_value_Icc hab.le hFc ⟨by linarith, by linarith⟩
+    choose p hp hFp using hgrid
+    have hp0 : p 0 = a := hF.injOn (hp 0) ⟨le_rfl, hab.le⟩ (by simp [hFp])
+    have hpn : p n = b := hF.injOn (hp n) ⟨hab.le, le_rfl⟩ (by rw [hFp]; simp; linarith)
+    have hstep : ∀ i < n, F (p (i + 1)) - F (p i) = h := fun i hi => by
+      rw [hFp, hFp, min_eq_left hi, min_eq_left hi.le]; push_cast; ring
     calc |d b - d a| = |∑ i ∈ range n, (d (p (i + 1)) - d (p i))| := by
-          rw [sum_range_sub (fun i => d (p i)), hpn]; simp [p]
+          rw [sum_range_sub (fun i => d (p i)), hpn, hp0]
       _ ≤ ∑ i ∈ range n, (f (p (i + 1)) - f (p i)) * h := by
           refine (abs_sum_le_sum_abs _ _).trans (sum_le_sum fun i hi => ?_)
           have hi := mem_range.1 hi
-          convert hd _ (hp i hi.le) _ (hp _ hi) (by simp [p]; linarith) using 2
-          simp [p]; ring
-      _ = (f b - f a) * (b - a) / n := by
-          rw [← sum_mul, sum_range_sub (fun i => f (p i)), hpn]; simp [p, h]; ring
+          rw [← hstep i hi]
+          exact hd _ (hp i) _ (hp _) ((hF.le_iff_le (hp i) (hp _)).1 (by linarith [hstep i hi]))
+      _ = (f b - f a) * (F b - F a) / n := by
+          rw [← sum_mul, sum_range_sub (fun i => f (p i)), hpn, hp0]; simp only [h]; ring
   have := ge_of_tendsto (tendsto_const_div_atTop_nhds_zero_nat _) (eventually_atTop.2 ⟨1, key⟩)
   simp only [d] at this; linarith [abs_nonpos_iff.1 this]
+
+/-- **Two functions supported by the same `f` differ by a constant** (`FSupports` with
+`F = id`). -/
+lemma Supports.sub_eq (hV : Supports f V (Icc a b)) (hW : Supports f W (Icc a b)) (hab : a ≤ b) :
+    V b - V a = W b - W a :=
+  FSupports.sub_eq (F := id) (strictMono_id.strictMonoOn _) continuousOn_id hV hW hab
 
 /-! ### Mechanisms -/
 
