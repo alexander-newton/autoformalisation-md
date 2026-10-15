@@ -22,7 +22,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 | **Kolotilin (2018); Dworczak–Martini (2019)**: strong persuasion duality, continuum of states (posterior-mean case of Dworczak–Kolotilin 2024) | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue`, `priceValue_of_convexOn` |
 | **Strassen (1965) on [0, 1]**: every distribution of posterior means comes from a signal; an optimal signal exists | `Strassen.lean` | `MeanPersuasion.PosteriorMeans.exists_signal`, `exists_optimal_signal` |
-| **The best price exists** for Lipschitz V (dual attainment; special case of Dworczak–Martini 2019) | `PriceAttainment.lean` | `MeanPersuasion.exists_optimal_price` |
+| **The best price exists** for Lipschitz V (dual attainment; the one-dimensional case of Dworczak–Kolotilin 2024, Corollary 2 and Theorem 5) | `PriceAttainment.lean` | `MeanPersuasion.exists_optimal_price` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
@@ -189,8 +189,10 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
 
 ### The best price exists for Lipschitz payoffs
 * **Dual attainment** (`exists_optimal_price`). If V is L-Lipschitz on [0, 1], some price costs
-  exactly the dual value. This is a special case of Dworczak–Martini (2019), who allow upper
-  semicontinuous V and prices convex on [0, 1].
+  exactly the dual value. This is the one-dimensional case of Dworczak–Kolotilin (2024),
+  Corollary 2 and Theorem 5 (i). They show that for upper semicontinuous V dual attainment
+  can fail, and characterise it (Theorem 3): it holds if and only if the concave closure has
+  bounded steepness at the prior.
 * **The proof.** Replace a price p by `lipPrice`: the supremum over y ∈ [0, 1] of the lines
   through (y, V(y)) whose slope is the slope of p at y, clamped to [−L, L]. On the side where
   clamping matters, the line falls at rate L, so it stays below V and hence below p; elsewhere
@@ -253,8 +255,10 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     [0, 1]) and `IsPayoff V`: measurable (already implied by upper semicontinuity) and bounded
     on [0, 1]. An upper semicontinuous V on [0, 1] is bounded above, so the only extra
     assumption is a lower bound; DK allow V unbounded below.
-  * **Dual attainment** is proved only for Lipschitz V (`exists_optimal_price`); DM 2019 prove
-    it for upper semicontinuous V. With prices convex on all of ℝ it can genuinely fail: with
+  * **Dual attainment** is proved only for Lipschitz V (`exists_optimal_price`), as in
+    Dworczak–Kolotilin (2024, Corollary 2); for general upper semicontinuous V it can fail
+    (their Theorem 3 characterises when it holds). With prices convex on all of ℝ it can fail
+    even for continuous V: with
     the uniform prior (or any prior of full support on [0, 1]) and V(m) = −√m, any price
     attaining the value would equal V on (0, 1] and so need infinite slope at 0.
   * In `PosteriorMeans.exists_signal` the instance `IsProbabilityMeasure μ` is redundant: a

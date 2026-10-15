@@ -11,8 +11,8 @@ import Mathlib.Topology.Order.ProjIcc
 
 For an `L`-Lipschitz payoff `V`, the dual infimum `priceValue V μ` is attained by a price
 (`exists_optimal_price`). (With prices convex on all of `ℝ`, attainment can fail for
-non-Lipschitz `V`, e.g. `V m = -√m` with the uniform prior.) This is a special case of
-Dworczak–Martini (2019), who allow upper semicontinuous `V`.
+non-Lipschitz `V`, e.g. `V m = -√m` with the uniform prior.) This is the one-dimensional
+case of Dworczak–Kolotilin (2024, Corollary 2 and Theorem 5 (i)).
 
 **Proof.** Replace any price `p` by `lipPrice`, the supremum over `y ∈ [0, 1]` of the lines
 through `(y, V y)` with the slope of `p` at `y` clamped to `[-L, L]`. It is again a price, lies
