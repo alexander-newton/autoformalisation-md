@@ -158,14 +158,16 @@ measurable and bounded on [0, 1] (`IsPayoff`), so step payoffs such as 1{m ≥ t
 Following Kolotilin (2018), the sender chooses a *distribution of posterior means* ν: a law on
 [0, 1] that is a mean-preserving contraction of the prior, ∫ q dν ≤ ∫ q dμ for every convex q
 (`PosteriorMeans`). Every signal induces one (`Signal.posteriorMeans`).
-* **Strong duality** (`strong_duality`). For continuous V, an optimal ν exists, and its value
-  equals the least expected cost of a price (`priceValue`).
+* **Strong duality** (`strong_duality`). For bounded upper semicontinuous V, an optimal ν
+  exists, and its value equals the least expected cost of a price (`priceValue`).
 * **The proof is one separation.** In C([0, 1]) × ℝ, the pairs (g, t) with g < p − V and
   ∫ p dμ < t for some convex p form an open convex set missing (0, priceValue). Pushing the set
   up in t and down in g makes the separating functional positive (`Separates`). Constant and
   scaled prices then show it is normalised and below μ on convex functions. By
   Riesz–Markov–Kakutani it is a probability measure ν: a distribution of posterior means worth
-  at least the dual value. Weak duality closes the gap.
+  at least the dual value on every continuous W > V. The Lipschitz envelopes
+  sup_y (V(y) − n|x − y|) + 1/(n+1) decrease to V, so by dominated convergence ν is worth at
+  least the dual value on V itself (`le_integral_of_forall_lt`). Weak duality closes the gap.
 * **Signals** (`Signal.value_le_priceValue`). No signal is worth more than the dual value.
 * **Sanity check** (`priceValue_of_convexOn`). For convex V the dual value is ∫ V dμ.
 
@@ -218,9 +220,10 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     induced by a signal is Strassen's theorem, which is not formalised. So
     `strong_duality` gives an optimal ν, and `Signal.value_le_priceValue` bounds every signal,
     but no optimal signal is constructed.
-  * Strong duality needs V continuous on ℝ (any V continuous on [0, 1] extends, e.g. by
-    composing with the projection onto [0, 1]); Dworczak–Martini and Dworczak–Kolotilin allow
-    upper semicontinuous V.
+  * Strong duality needs V upper semicontinuous on ℝ (any V upper semicontinuous on [0, 1]
+    extends, e.g. by composing with the projection onto [0, 1]) and bounded on [0, 1]. An
+    upper semicontinuous V on [0, 1] is bounded above but may be unbounded below; that case is
+    excluded.
   * The dual infimum is not shown to be attained. With prices convex on all of ℝ it can
     genuinely fail to be attained even where the papers' dual is: for V(m) = −√m any price
     attaining the value would equal V on (0, 1] and so need infinite slope at 0.
