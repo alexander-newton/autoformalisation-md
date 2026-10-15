@@ -20,7 +20,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `AnyPlay.le_of_canonical_le`, `outside_le_agentValue` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
-| **Dworczak–Kolotilin (2024)**: strong persuasion duality, continuum of states | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue` |
+| **Kolotilin (2018); Dworczak–Martini (2019)**: strong persuasion duality, continuum of states (posterior-mean case of Dworczak–Kolotilin 2024) | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue`, `priceValue_of_convexOn` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
@@ -167,6 +167,7 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
   Riesz–Markov–Kakutani it is a probability measure ν: a distribution of posterior means worth
   at least the dual value. Weak duality closes the gap.
 * **Signals** (`Signal.value_le_priceValue`). No signal is worth more than the dual value.
+* **Sanity check** (`priceValue_of_convexOn`). For convex V the dual value is ∫ V dμ.
 
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
@@ -211,14 +212,18 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     than a separate participation decision.
 * **Persuasion, finite case** (`Persuasion.lean`). Finite states and actions. The dual infimum
   is shown to equal the value but is not shown to be attained.
-* **Persuasion, continuum of states** (`MeanPersuasion.lean`).
+* **Persuasion, continuum of states** (`MeanPersuasion.lean`, `MeanDuality.lean`).
   * **Strong duality is over distributions of posterior means**, as in Kolotilin (2018) and
     Dworczak–Martini (2019), not over signals. That every distribution of posterior means is
     induced by a signal is Strassen's theorem, which is not formalised. So
     `strong_duality` gives an optimal ν, and `Signal.value_le_priceValue` bounds every signal,
     but no optimal signal is constructed.
-  * Strong duality needs V continuous; Dworczak–Kolotilin allow upper semicontinuous V. The
-    dual infimum is not shown to be attained.
+  * Strong duality needs V continuous on ℝ (any V continuous on [0, 1] extends, e.g. by
+    composing with the projection onto [0, 1]); Dworczak–Martini and Dworczak–Kolotilin allow
+    upper semicontinuous V.
+  * The dual infimum is not shown to be attained. With prices convex on all of ℝ it can
+    genuinely fail to be attained even where the papers' dual is: for V(m) = −√m any price
+    attaining the value would equal V on (0, 1] and so need infinite slope at 0.
   * The sender's payoff depends on the posterior mean only (the "linear" case).
   * Prices must be convex on all of ℝ, not just on [0, 1]. This excludes convex functions on
     [0, 1] with infinite slope at an endpoint. DK allow any p with ∫ p dν ≥ V(ν) for every

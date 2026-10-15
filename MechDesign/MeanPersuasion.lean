@@ -53,6 +53,10 @@ lemma le_support (hp : ConvexOn ℝ univ p) (x y : ℝ) : p x + subgrad p x * (y
     rw [slope_def_field, div_le_iff₀ (sub_pos.2 h)] at h1
     rw [subgrad]; nlinarith
 
+/-- A convex function on `ℝ` is continuous. -/
+lemma continuous_of_convexOn (hp : ConvexOn ℝ univ p) : Continuous p :=
+  continuousOn_univ.1 (hp.continuousOn isOpen_univ)
+
 lemma subgrad_mono (hp : ConvexOn ℝ univ p) : Monotone (subgrad p) :=
   fun x y h => hp.monotoneOn_rightDeriv (by simp) (by simp) h
 
@@ -92,7 +96,7 @@ lemma IsPayoff.of_continuous {V : ℝ → ℝ} (hV : Continuous V) : IsPayoff V 
     fun _ h x hx => h x hx⟩
 
 lemma IsPrice.continuous {V : ℝ → ℝ} (hp : IsPrice V p) : Continuous p :=
-  continuousOn_univ.1 (hp.convex.continuousOn isOpen_univ)
+  continuous_of_convexOn hp.convex
 
 namespace Signal
 
@@ -170,7 +174,7 @@ lemma clampedSubgrad_spec (hp : ConvexOn ℝ univ p) :
 same function of the state. -/
 theorem integral_mean_le (hp : ConvexOn ℝ univ p) :
     ∫ z, p z.2 ∂S.π ≤ ∫ z, p z.1 ∂S.π := by
-  have hpc := continuousOn_univ.1 (hp.continuousOn isOpen_univ)
+  have hpc := continuous_of_convexOn hp
   obtain ⟨hg, hC, heq⟩ := clampedSubgrad_spec hp
   have hi := integrable_comp hpc continuous_snd S.mean_mem
   -- integrate the supporting line at the mean; its slope term is unbiased
@@ -279,7 +283,7 @@ theorem silent_optimal (hV : ConcaveOn ℝ univ V) (hμ : ∀ᵐ θ ∂μ, θ �
   -- a supporting line of `V` at the prior mean is a price
   have hp : IsPrice V fun x => V c + -t * (x - c) := ⟨convexOn_affine _ _ _, fun x _ => by
     have := le_support hV.neg c x; simp only [Pi.neg_apply] at this; linarith⟩
-  have hVc : Continuous V := continuousOn_univ.1 (hV.continuousOn isOpen_univ)
+  have hVc : Continuous V := by simpa using continuous_of_convexOn hV.neg
   have hi : Integrable (fun θ : ℝ => θ) μ := (integrable_const (1 : ℝ)).mono'
     measurable_id.aestronglyMeasurable (hμ.mono fun θ h => abs_le.2 ⟨by linarith [h.1], h.2⟩)
   calc S.value V ≤ ∫ θ, V c + -t * (θ - c) ∂μ := hS ▸ S.value_le (.of_continuous hVc) hp

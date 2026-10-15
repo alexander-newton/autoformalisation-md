@@ -8,7 +8,10 @@ import Mathlib.Topology.UnitInterval
 import Mathlib.Topology.ContinuousMap.Compact
 
 /-!
-# Strong duality for persuasion with a continuum of states (Dworczak–Kolotilin)
+# Strong duality for persuasion with a continuum of states
+
+For posterior-mean payoffs this is Kolotilin (2018, Theorem 1) and Dworczak–Martini (2019); it
+is the posterior-mean case of Dworczak–Kolotilin (2024).
 
 The sender chooses a distribution `ν` of posterior means; feasibility is that `ν` is a
 mean-preserving contraction of the prior `μ` (`PosteriorMeans`, as in Kolotilin 2018). The dual
@@ -30,9 +33,6 @@ namespace MeanPersuasion
 
 variable {μ : Measure ℝ} {V p : ℝ → ℝ}
 
-lemma continuous_of_convexOn (hp : ConvexOn ℝ univ p) : Continuous p :=
-  continuousOn_univ.1 (hp.continuousOn isOpen_univ)
-
 lemma integrable_of_mem {ν : Measure ℝ} [IsFiniteMeasure ν] (h : ∀ᵐ x ∂ν, x ∈ Icc (0 : ℝ) 1)
     {f : ℝ → ℝ} (hf : IsPayoff f) : Integrable f ν :=
   let ⟨B, hB⟩ := hf.bdd
@@ -50,7 +50,8 @@ structure PosteriorMeans (μ : Measure ℝ) where
 
 attribute [instance] PosteriorMeans.isProb
 
-/-- The **dual value**: the least expected cost of a price. -/
+/-- The **dual value**: the least expected cost of a price. (Meaningful when `μ` is a
+probability measure on `[0, 1]`, so that prices are bounded below in cost.) -/
 noncomputable def priceValue (V : ℝ → ℝ) (μ : Measure ℝ) : ℝ :=
   ⨅ p : {p // IsPrice V p}, ∫ θ, p.1 θ ∂μ
 
@@ -97,6 +98,8 @@ lemma priceValue_le (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayo
 
 /-- A continuous function on `ℝ`, restricted to `[0, 1]`. -/
 def onI (f : ℝ → ℝ) (hf : Continuous f) : C(I, ℝ) := ⟨fun x => f x, hf.comp continuous_subtype_val⟩
+
+lemma onI_zero : onI (fun _ => (0 : ℝ)) continuous_const = 0 := by ext; simp [onI]
 
 lemma onI_const (k : ℝ) : onI (fun _ => k) continuous_const = k • 1 := by ext; simp [onI]
 
@@ -223,8 +226,7 @@ lemma zero_price (hf : Separates f hV μ D) {δ : ℝ} (hδ : 0 < δ) {h : C(I, 
     {s : ℝ} (hs : 0 ≤ s) : -coordL f (onI V hV) - δ * coordL f 1 - coordL f h + (δ + s) * f (0, 1)
       < D * f (0, 1) := by
   have := hf _ (convexOn_const 0 convex_univ) δ hδ h hh s hs
-  rwa [show onI (fun _ => (0 : ℝ)) _ = 0 by ext; simp [onI], map_zero, integral_zero, zero_add,
-    zero_sub] at this
+  rwa [onI_zero, map_zero, integral_zero, zero_add, zero_sub] at this
 
 /-- Pushing the pairs up in `t`: `f (0, 1) ≤ 0`. -/
 lemma coord_nonpos (hf : Separates f hV μ D) : f (0, 1) ≤ 0 :=
@@ -330,7 +332,7 @@ lemma exists_measure (Λ : C(I, ℝ) →L[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0
   rw [← ENNReal.ofReal_toReal (measure_ne_top _ univ), ← measureReal_def, this,
     ENNReal.ofReal_one]
 
-/-- **Strong duality** (Dworczak–Kolotilin, posterior-mean case). With a continuous payoff,
+/-- **Strong duality** (Kolotilin 2018; Dworczak–Martini 2019; Dworczak–Kolotilin 2024). With a continuous payoff,
 some distribution of posterior means is optimal, and its value equals the least expected cost
 of a price. -/
 theorem strong_duality (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : Continuous V) :
@@ -345,6 +347,17 @@ theorem strong_duality (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : Con
   have hG : ∫ m, V m ∂G.ν = priceValue V μ :=
     le_antisymm (G.value_le (.of_continuous hV)) ((hint V hV).symm ▸ hval)
   exact ⟨G, fun G' => hG ▸ G'.value_le (.of_continuous hV), hG⟩
+
+/-- Full disclosure: the prior is a distribution of posterior means. -/
+def PosteriorMeans.full (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : PosteriorMeans μ :=
+  { ν := μ, mem := hμ, contraction := fun _ _ => le_rfl }
+
+/-- For convex `V` the dual value is `∫ V dμ`: `V` is its own price, and full disclosure
+attains it. -/
+theorem priceValue_of_convexOn (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : ConvexOn ℝ univ V) :
+    priceValue V μ = ∫ θ, V θ ∂μ :=
+  have hc := IsPayoff.of_continuous (continuous_of_convexOn hV)
+  le_antisymm (priceValue_le hμ hc ⟨hV, fun _ _ => le_rfl⟩) ((PosteriorMeans.full hμ).value_le hc)
 
 /-- Every signal is worth at most the dual value. -/
 theorem Signal.value_le_priceValue (S : Signal) (hV : IsPayoff V) :
