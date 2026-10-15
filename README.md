@@ -20,6 +20,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `AnyPlay.le_of_canonical_le`, `outside_le_agentValue` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
+| **Dworczak–Kolotilin**, continuum of states: weak duality and complementary slackness | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
 
@@ -135,6 +136,21 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
 * **Engine.** Strong duality comes from `Duality.strong_duality`, a Hahn–Banach separation
   for linear programs over compact convex sets.
 
+### Persuasion with a continuum of states
+The state θ lies in [0, 1] with an arbitrary prior μ. The sender's payoff V(m) depends on the
+receiver's posterior mean m (Kolotilin 2018; Dworczak–Kolotilin 2024).
+* **Signals** (`Signal`). A signal is the joint law of (θ, m). Bayes' rule is the condition that
+  m is the conditional mean of θ given m: E[θ g(m)] = E[m g(m)] for bounded measurable g.
+* **Prices** (`IsPrice`). A price is a convex function p with p ≥ V on [0, 1].
+* **Weak duality** (`value_le`). Every signal earns at most the expected price ∫ p dμ. The one
+  identity is that the posterior mean is unbiased, E[g(m)(θ − m)] = 0 (`integral_mul_sub`).
+  Integrating a supporting line of p at m gives E p(m) ≤ E p(θ) (`integral_mean_le`).
+* **Complementary slackness** (`optimal_of_slack`). Suppose p = V at every induced posterior
+  mean, and p is affine on the states pooled into each mean. Then the signal is optimal among
+  all signals with the same prior, and the price is optimal among all prices.
+* **Corollaries.** Full disclosure is optimal for convex V (`full_optimal`); no disclosure is
+  optimal for concave V (`silent_optimal`), priced by the tangent line at the prior mean.
+
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
   nonnegativity is not needed by the proofs.
@@ -176,9 +192,18 @@ state at p_y(θ) = max_a [v(a,θ) + Σ_{a'} y(a,a')(w(a,θ) − w(a',θ))].
   * The canonical output space is a finite set of (belief, allocation) pairs that depends on
     the original play, not DS's fixed space Δ(Θ). Exit is a message of the mechanism rather
     than a separate participation decision.
-* **Persuasion is the finite case.** It is finite states and actions, not Kolotilin's
-  continuous-state model. The dual infimum is shown to equal the value but is not shown to be
-  attained.
+* **Persuasion, finite case** (`Persuasion.lean`). Finite states and actions. The dual infimum
+  is shown to equal the value but is not shown to be attained.
+* **Persuasion, continuum of states** (`MeanPersuasion.lean`).
+  * **Strong duality is not proved.** We prove weak duality and the sufficiency of
+    complementary slackness, not that the value equals the least price cost in general.
+  * The sender's payoff depends on the posterior mean only (the "linear" case).
+  * Prices must be convex on all of ℝ, not just on [0, 1]. This excludes convex functions on
+    [0, 1] with infinite slope at an endpoint. V must be continuous on ℝ (any continuous V on
+    [0, 1] extends).
+  * Signals are given by their joint law of (state, posterior mean). Every experiment induces
+    one; we do not construct the experiment from it. The requirement that m lie in [0, 1] is
+    part of the definition, although it follows from the mean condition.
 
 ## Style
 The proofs aim to read like a Halmos textbook: name the one concept a proof keeps circling,
@@ -203,4 +228,5 @@ Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
-* Continuous-state persuasion duality (Dworczak–Kolotilin), using convex price functions.
+* Strong duality for continuous-state persuasion (Dworczak–Kolotilin), with attainment of the
+  dual.

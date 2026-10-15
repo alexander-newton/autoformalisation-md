@@ -7,3 +7,4 @@ import MechDesign.Ironing
 import MechDesign.Hull
 import MechDesign.RevenueCurve
 import MechDesign.LimitedCommitment
+import MechDesign.MeanPersuasion

@@ -102,7 +102,7 @@ lemma integral_prior {f : ℝ → ℝ} (hf : Continuous f) : ∫ θ, f θ ∂S.p
 lemma integrable_comp {f : ℝ → ℝ} (hf : Continuous f) {q : ℝ × ℝ → ℝ} (hq : Continuous q)
     (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1) : Integrable (fun z => f (q z)) S.π :=
   let ⟨C, hC⟩ := isCompact_Icc.exists_bound_of_continuousOn hf.continuousOn
-  (integrable_const C).mono' (hf.comp hq).aestronglyMeasurable (hmem.mono fun z hz => hC _ hz)
+  (integrable_const C).mono' (hf.comp hq).aestronglyMeasurable (hmem.mono fun _ hz => hC _ hz)
 
 lemma integrable_mul {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1)
     {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
@@ -114,6 +114,12 @@ lemma integrable_mul {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ
           zero_le_one
       _ = C := one_mul C)
 
+lemma integrable_mul_sub {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
+    Integrable (fun z => g z.2 * (z.1 - z.2)) S.π :=
+  ((integrable_mul continuous_fst S.state_mem hg hC).sub
+    (integrable_mul continuous_snd S.mean_mem hg hC)).congr
+    (ae_of_all _ fun _ => by simp only [Pi.sub_apply]; ring)
+
 /-- **The posterior mean is unbiased**: `E[g(m) (θ - m)] = 0` for bounded measurable `g`. -/
 theorem integral_mul_sub {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
     ∫ z, g z.2 * (z.1 - z.2) ∂S.π = 0 := by
@@ -121,39 +127,41 @@ theorem integral_mul_sub {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : �
   rw [integral_sub (integrable_mul continuous_fst S.state_mem hg hC)
     (integrable_mul continuous_snd S.mean_mem hg hC), S.mean_eq g hg C hC, sub_self]
 
+/-- Adding an unbiased term `g(m) (θ - m)` does not change an expectation. -/
+lemma integral_add_mul_sub {f : ℝ × ℝ → ℝ} (hf : Integrable f S.π) {g : ℝ → ℝ}
+    (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
+    ∫ z, f z + g z.2 * (z.1 - z.2) ∂S.π = ∫ z, f z ∂S.π := by
+  rw [integral_add hf (integrable_mul_sub hg hC), integral_mul_sub hg hC, add_zero]
+
+/-- The subgradient of a convex function, clamped outside `[0, 1]` so that it is bounded. -/
+noncomputable def clampedSubgrad (p : ℝ → ℝ) (x : ℝ) : ℝ :=
+  max (subgrad p 0) (min (subgrad p x) (subgrad p 1))
+
+lemma clampedSubgrad_spec (hp : ConvexOn ℝ univ p) :
+    Measurable (clampedSubgrad p) ∧ (∀ x, |clampedSubgrad p x| ≤ |subgrad p 0| + |subgrad p 1|)
+      ∧ ∀ x ∈ Icc (0 : ℝ) 1, clampedSubgrad p x = subgrad p x := by
+  have hm := subgrad_mono hp
+  -- the clamped subgradient lies between its values at `0` and `1`
+  have hlo : ∀ x, subgrad p 0 ≤ clampedSubgrad p x := fun x => le_max_left _ _
+  have hhi : ∀ x, clampedSubgrad p x ≤ subgrad p 1 :=
+    fun x => max_le (hm zero_le_one) (min_le_right _ _)
+  refine ⟨measurable_const.max (hm.measurable.min measurable_const), fun x => abs_le.2 ⟨?_, ?_⟩,
+    fun x hx => by rw [clampedSubgrad, min_eq_left (hm hx.2), max_eq_right (hm hx.1)]⟩
+  · linarith [hlo x, neg_abs_le (subgrad p 0), abs_nonneg (subgrad p 1)]
+  · linarith [hhi x, le_abs_self (subgrad p 1), abs_nonneg (subgrad p 0)]
+
 /-- **Jensen for signals**: a convex function of the posterior mean is on average below the
 same function of the state. -/
 theorem integral_mean_le (hp : ConvexOn ℝ univ p) :
     ∫ z, p z.2 ∂S.π ≤ ∫ z, p z.1 ∂S.π := by
   have hpc := continuousOn_univ.1 (hp.continuousOn isOpen_univ)
-  -- the subgradient, clamped to its values on `[0, 1]` so that it is bounded
-  set s := subgrad p
-  set g := fun x => max (s 0) (min (s x) (s 1))
-  have hs01 := subgrad_mono hp (zero_le_one' ℝ)
-  have hg : Measurable g :=
-    measurable_const.max ((subgrad_mono hp).measurable.min measurable_const)
-  have hC : ∀ x, |g x| ≤ |s 0| + |s 1| := fun x => abs_le.2
-    ⟨by linarith [neg_abs_le (s 0), abs_nonneg (s 1), le_max_left (s 0) (min (s x) (s 1))],
-      max_le (by linarith [le_abs_self (s 0), abs_nonneg (s 1)])
-        ((min_le_right _ _).trans (by linarith [le_abs_self (s 1), abs_nonneg (s 0)]))⟩
-  -- integrate the supporting line at the mean; its slope term vanishes
-  calc ∫ z, p z.2 ∂S.π = ∫ z, p z.2 + g z.2 * (z.1 - z.2) ∂S.π := by
-        rw [integral_add (integrable_comp hpc continuous_snd S.mean_mem)
-          ((integrable_mul continuous_fst S.state_mem hg hC).sub
-            (integrable_mul continuous_snd S.mean_mem hg hC) |>.congr
-            (ae_of_all _ fun z => by simp [mul_sub, mul_comm])),
-          integral_mul_sub hg hC, add_zero]
-    _ ≤ ∫ z, p z.1 ∂S.π := integral_mono_ae (by
-          refine (integrable_comp hpc continuous_snd S.mean_mem).add ?_
-          exact ((integrable_mul continuous_fst S.state_mem hg hC).sub
-            (integrable_mul continuous_snd S.mean_mem hg hC)).congr
-            (ae_of_all _ fun z => by simp [mul_sub, mul_comm]))
-          (integrable_comp hpc continuous_fst S.state_mem)
-          (S.mean_mem.mono fun z hz => by
-            have : g z.2 = s z.2 := by
-              simp only [g, min_eq_left (subgrad_mono hp hz.2),
-                max_eq_right (subgrad_mono hp hz.1)]
-            rw [this]; exact le_support hp z.2 z.1)
+  obtain ⟨hg, hC, heq⟩ := clampedSubgrad_spec hp
+  have hi := integrable_comp hpc continuous_snd S.mean_mem
+  -- integrate the supporting line at the mean; its slope term is unbiased
+  rw [← integral_add_mul_sub hi hg hC]
+  refine integral_mono_ae (hi.add (integrable_mul_sub hg hC))
+    (integrable_comp hpc continuous_fst S.state_mem) (S.mean_mem.mono fun z hz => ?_)
+  simpa only [heq _ hz] using le_support hp z.2 z.1
 
 variable {V : ℝ → ℝ}
 
@@ -175,11 +183,7 @@ theorem value_eq_of_slack (hp : IsPrice V p) (hVp : ∀ᵐ z ∂S.π, V z.2 = p 
     S.value V = ∫ θ, p θ ∂S.prior := by
   have hpc := hp.continuous
   rw [integral_prior hpc, value, integral_congr_ae hVp, integral_congr_ae haff,
-    integral_add (integrable_comp hpc continuous_snd S.mean_mem) ?_, integral_mul_sub hℓ hC,
-    add_zero]
-  exact ((integrable_mul continuous_fst S.state_mem hℓ hC).sub
-    (integrable_mul continuous_snd S.mean_mem hℓ hC)).congr
-    (ae_of_all _ fun z => by simp [mul_sub, mul_comm])
+    integral_add_mul_sub (integrable_comp hpc continuous_snd S.mean_mem) hℓ hC]
 
 /-- **Verification theorem**: under complementary slackness the signal is optimal among all
 signals with the same prior, and the price is optimal among all prices. -/
@@ -197,15 +201,19 @@ end Signal
 
 variable (μ : Measure ℝ) [IsProbabilityMeasure μ]
 
+omit [IsProbabilityMeasure μ] in
+/-- Expectations under a signal built from the prior. -/
+lemma integral_map_snd {φ : ℝ → ℝ × ℝ} (hφ : Measurable φ) {V : ℝ → ℝ} (hV : Continuous V) :
+    ∫ z, V z.2 ∂(μ.map φ) = ∫ θ, V (φ θ).2 ∂μ :=
+  integral_map hφ.aemeasurable (hV.comp continuous_snd).aestronglyMeasurable
+
 /-- The signal that reveals the state: `m = θ`. -/
 noncomputable def full (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : Signal where
   π := μ.map fun θ => (θ, θ)
-  isProb := isProbabilityMeasure_map (by fun_prop)
   state_mem := (ae_map_iff (by fun_prop) (measurableSet_Icc.preimage measurable_fst)).2 hμ
   mean_mem := (ae_map_iff (by fun_prop) (measurableSet_Icc.preimage measurable_snd)).2 hμ
   mean_eq g hg _ _ := by
-    rw [integral_map (by fun_prop) (measurable_fst.mul (hg.comp measurable_snd)).aestronglyMeasurable,
-      integral_map (by fun_prop) (measurable_snd.mul (hg.comp measurable_snd)).aestronglyMeasurable]
+    rw [integral_map (by fun_prop) (by fun_prop), integral_map (by fun_prop) (by fun_prop)]
 
 /-- The prior mean. -/
 noncomputable def priorMean : ℝ := ∫ θ, θ ∂μ
@@ -223,20 +231,18 @@ lemma priorMean_mem (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : priorMean 
 /-- The signal that reveals nothing: `m` is the prior mean. -/
 noncomputable def silent (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : Signal where
   π := μ.map fun θ => (θ, priorMean μ)
-  isProb := isProbabilityMeasure_map (by fun_prop)
   state_mem := (ae_map_iff (by fun_prop) (measurableSet_Icc.preimage measurable_fst)).2 hμ
   mean_mem := (ae_map_iff (by fun_prop) (measurableSet_Icc.preimage measurable_snd)).2
     (ae_of_all _ fun _ => priorMean_mem hμ)
   mean_eq g hg _ _ := by
-    rw [integral_map (by fun_prop) (measurable_fst.mul (hg.comp measurable_snd)).aestronglyMeasurable,
-      integral_map (by fun_prop) (measurable_snd.mul (hg.comp measurable_snd)).aestronglyMeasurable]
+    rw [integral_map (by fun_prop) (by fun_prop), integral_map (by fun_prop) (by fun_prop)]
     simp [integral_mul_const, priorMean]
 
 lemma full_prior (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : (full μ hμ).prior = μ := by
-  simp [Signal.prior, full, Measure.map_map measurable_fst (by fun_prop : Measurable _)]
+  rw [Signal.prior, full, Measure.map_map measurable_fst (by fun_prop)]; exact Measure.map_id
 
 lemma silent_prior (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) : (silent hμ).prior = μ := by
-  simp [Signal.prior, silent, Measure.map_map measurable_fst (by fun_prop : Measurable _)]
+  rw [Signal.prior, silent, Measure.map_map measurable_fst (by fun_prop)]; exact Measure.map_id
 
 variable {V : ℝ → ℝ}
 
@@ -245,8 +251,8 @@ theorem full_optimal (hV : ConvexOn ℝ univ V) (hμ : ∀ᵐ θ ∂μ, θ ∈ I
     (S : Signal) (hS : S.prior = μ) : S.value V ≤ (full μ hμ).value V := by
   have hp : IsPrice V V := ⟨hV, fun _ _ => le_rfl⟩
   calc S.value V ≤ ∫ θ, V θ ∂μ := hS ▸ S.value_le hp.continuous hp
-    _ = (full μ hμ).value V :=
-      (integral_map (by fun_prop) (hp.continuous.comp continuous_snd).aestronglyMeasurable).symm
+    _ = (full μ hμ).value V := by
+      dsimp only [Signal.value, full]; rw [integral_map_snd μ (by fun_prop) hp.continuous]
 
 /-- **No disclosure is optimal when `V` is concave**: the tangent line at the prior mean is a
 price that costs exactly `V` of the prior mean. -/
@@ -262,12 +268,12 @@ theorem silent_optimal (hV : ConcaveOn ℝ univ V) (hμ : ∀ᵐ θ ∂μ, θ �
     measurable_id.aestronglyMeasurable (hμ.mono fun θ h => abs_le.2 ⟨by linarith [h.1], h.2⟩)
   calc S.value V ≤ ∫ θ, V c + -t * (θ - c) ∂μ := hS ▸ S.value_le hVc hp
     _ = V c := by
-      rw [integral_add (integrable_const _) ((hi.sub (integrable_const c)).const_mul _),
-        integral_const_mul, integral_sub hi (integrable_const c)]
+      have h1 : Integrable (fun θ : ℝ => θ - c) μ := hi.sub (integrable_const c)
+      rw [integral_add (integrable_const _) (h1.const_mul _), integral_const_mul,
+        integral_sub hi (integrable_const c)]
       simp [c, priorMean]
     _ = (silent hμ).value V := by
-      rw [Signal.value, silent, integral_map (by fun_prop)
-        (hVc.comp continuous_snd).aestronglyMeasurable]
-      simp
+      dsimp only [Signal.value, silent]; rw [integral_map_snd μ (by fun_prop) hVc]
+      simp [c]
 
 end MeanPersuasion
