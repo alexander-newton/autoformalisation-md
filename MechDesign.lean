@@ -12,3 +12,4 @@ import MechDesign.MeanDuality
 import MechDesign.Strassen
 import MechDesign.PriceAttainment
 import MechDesign.StatePrices
+import MechDesign.DualAttainment
