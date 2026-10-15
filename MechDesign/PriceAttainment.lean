@@ -66,67 +66,75 @@ lemma line_le_price (hL : 0 ≤ L) (hLip : ∀ x ∈ Icc (0 : ℝ) 1, ∀ y ∈ 
     rw [clampSlope]; linarith [hLip x hx y hy, hp.le x hx]
   · push Not at h; rw [clampSlope] at h ⊢; nlinarith
 
-/-- **The supremum of lines** through the points `(y, V y)`, `y ∈ [0, 1]`, with slopes `s y`. -/
-noncomputable def lineSup (V s : ℝ → ℝ) (x : ℝ) : ℝ := ⨆ y : I, (V y + s y * (x - y))
+/-- **The supremum of lines** through the points `(y, V y)`, `y ∈ A`, with slopes `s y`. -/
+noncomputable def lineSup (A : Set ℝ) (V s : ℝ → ℝ) (x : ℝ) : ℝ := ⨆ y : A, (V y + s y * (x - y))
 
 section lineSup
 
-variable {s : ℝ → ℝ} {B : ℝ} (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ B) (hs : ∀ y, |s y| ≤ L)
-include hB hs
+variable {A : Set ℝ} (hA : A ⊆ Icc 0 1) {s : ℝ → ℝ} {B : ℝ}
+  (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ B) (hs : ∀ y, |s y| ≤ L)
+include hA hB hs
 
-omit hB in
+omit hA hB in
 /-- A line of slope at most `L` in absolute value moves by at most `L |d|` over a step `d`. -/
 lemma slope_mul_le (y d : ℝ) : s y * d ≤ L * |d| :=
   (le_abs_self _).trans (by
     rw [abs_mul]; exact mul_le_mul_of_nonneg_right (hs y) (abs_nonneg d))
 
-lemma lineSup_bdd (x : ℝ) : BddAbove (range fun y : I => V y + s y * (x - y)) :=
+lemma lineSup_bdd (x : ℝ) : BddAbove (range fun y : A => V y + s y * (x - y)) :=
   ⟨B + L * (|x| + 1), by
     rintro _ ⟨y, rfl⟩
     have hL : 0 ≤ L := (abs_nonneg _).trans (hs 0)
-    have h1 := (le_abs_self _).trans (hB y y.2)
+    have h1 := (le_abs_self _).trans (hB y (hA y.2))
     have h2 := slope_mul_le hs y (x - y)
     have h3 := mul_le_mul_of_nonneg_left ((abs_sub x y).trans
-      (by linarith [abs_le_one_of_mem y] : |x| + |(y : ℝ)| ≤ |x| + 1)) hL
+      (by linarith [abs_le_one_of_mem ⟨y, hA y.2⟩] : |x| + |(y : ℝ)| ≤ |x| + 1)) hL
     linarith⟩
 
-lemma line_le_lineSup (y : I) (x : ℝ) : V y + s y * (x - y) ≤ lineSup V s x :=
-  le_ciSup (lineSup_bdd hB hs x) y
+lemma line_le_lineSup (y : A) (x : ℝ) : V y + s y * (x - y) ≤ lineSup A V s x :=
+  le_ciSup (lineSup_bdd hA hB hs x) y
 
-lemma convexOn_lineSup : ConvexOn ℝ univ (lineSup V s) :=
+lemma le_lineSup {x : ℝ} (hx : x ∈ A) : V x ≤ lineSup A V s x := by
+  simpa using line_le_lineSup hA hB hs ⟨x, hx⟩ x
+
+lemma convexOn_lineSup [Nonempty A] : ConvexOn ℝ univ (lineSup A V s) :=
   ⟨convex_univ, fun x _ y _ a b ha hb hab => ciSup_le fun m => by
-    have hx := line_le_lineSup hB hs m x
-    have hy := line_le_lineSup hB hs m y
+    have hx := line_le_lineSup hA hB hs m x
+    have hy := line_le_lineSup hA hB hs m y
     simp only [smul_eq_mul]
     calc V m + s m * (a * x + b * y - m)
         = a * (V m + s m * (x - m)) + b * (V m + s m * (y - m)) := by
           linear_combination (-(V m) + s m * m) * hab
       _ ≤ _ := by gcongr⟩
 
-lemma lineSup_lip (x x' : ℝ) : lineSup V s x ≤ lineSup V s x' + L * |x - x'| :=
+lemma lineSup_lip [Nonempty A] (x x' : ℝ) :
+    lineSup A V s x ≤ lineSup A V s x' + L * |x - x'| :=
   ciSup_le fun y => by
-    have h1 := line_le_lineSup hB hs y x'
+    have h1 := line_le_lineSup hA hB hs y x'
     have h2 := slope_mul_le hs y (x - x')
     linarith [show s y * (x - y) = s y * (x' - y) + s y * (x - x') by ring]
 
-lemma lineSup_mem {x : ℝ} (hx : x ∈ Icc (0 : ℝ) 1) : lineSup V s x ∈ Icc (-B) (B + L) :=
-  ⟨by linarith [line_le_lineSup hB hs ⟨x, hx⟩ x, neg_abs_le (V x), hB x hx],
+lemma lineSup_mem {x : ℝ} (hx : x ∈ A) : lineSup A V s x ∈ Icc (-B) (B + L) :=
+  have : Nonempty A := ⟨⟨x, hx⟩⟩
+  ⟨by linarith [le_lineSup hA hB hs hx, neg_abs_le (V x), hB x (hA hx)],
     ciSup_le fun y => by
       have hL : 0 ≤ L := (abs_nonneg _).trans (hs 0)
       have h := slope_mul_le hs y (x - y)
+      have hy := hA y.2
       have h1 := mul_le_mul_of_nonneg_left (show |x - y| ≤ 1 by
-        rw [abs_le]; constructor <;> linarith [hx.1, hx.2, y.2.1, y.2.2]) hL
-      linarith [(le_abs_self _).trans (hB y y.2)]⟩
+        rw [abs_le]; constructor <;> linarith [(hA hx).1, (hA hx).2, hy.1, hy.2]) hL
+      linarith [(le_abs_self _).trans (hB y hy)]⟩
 
-/-- A supremum of lines through `V` is a price. -/
-lemma isPrice_lineSup : IsPrice V (lineSup V s) :=
-  ⟨convexOn_lineSup hB hs, fun x hx => by simpa using line_le_lineSup hB hs ⟨x, hx⟩ x⟩
+omit hA in
+/-- A supremum of lines through `V` at every point of `[0, 1]` is a price. -/
+lemma isPrice_lineSup : IsPrice V (lineSup I V s) :=
+  ⟨convexOn_lineSup subset_rfl hB hs, fun _ hx => le_lineSup subset_rfl hB hs hx⟩
 
 end lineSup
 
 /-- **The Lipschitz price** built from `p`: the lines through `(y, V y)` with the clamped slope
 of `p` at `y`. -/
-noncomputable def lipPrice (L : ℝ) (V p : ℝ → ℝ) : ℝ → ℝ := lineSup V (clampSlope L p)
+noncomputable def lipPrice (L : ℝ) (V p : ℝ → ℝ) : ℝ → ℝ := lineSup I V (clampSlope L p)
 
 /-- `lipPrice` is a price, below `p` on `[0, 1]`. -/
 lemma lipPrice_spec {B : ℝ} (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ B) (hL : 0 ≤ L)
@@ -262,7 +270,8 @@ lemma isCompact_candidates (B : ℝ) : IsCompact (candidates L B) := by
 /-- `lipPrice` restricted to `[0, 1]`. -/
 noncomputable def lipB {B : ℝ} (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ B) (hL : 0 ≤ L) (p : ℝ → ℝ) :
     I →ᵇ ℝ :=
-  toB (lipPrice L V p) (continuous_of_convexOn (convexOn_lineSup hB (abs_clampSlope_le hL)))
+  toB (lipPrice L V p)
+    (continuous_of_convexOn (convexOn_lineSup subset_rfl hB (abs_clampSlope_le hL)))
 
 /-- **Limits of Lipschitz prices are supported**: the clamped slopes at each `x` converge along a
 subsequence, and the lines through `(x, V x)` pass to the limit. -/
@@ -273,7 +282,7 @@ lemma supported_of_tendsto {B : ℝ} (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ 
     abs_le.1 (abs_clampSlope_le (p := P n) hL x)
   exact ⟨b, hb, fun y => le_of_tendsto_of_tendsto' (tendsto_const_nhds.add (hblim.mul_const _))
     (((continuous_eval_const y).tendsto g).comp (hlim.comp hψ.tendsto_atTop))
-    fun n => line_le_lineSup hB (abs_clampSlope_le hL) x y⟩
+    fun n => line_le_lineSup subset_rfl hB (abs_clampSlope_le hL) x y⟩
 
 variable [IsProbabilityMeasure μ]
 
@@ -304,12 +313,13 @@ lemma exists_supported (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsP
   have hq : ∀ n, q n ∈ candidates L B := fun n =>
     ⟨fun x y => by
         simpa [q, lipB, lipPrice, Subtype.dist_eq, Real.dist_eq] using
-          lineSup_lip hB (abs_clampSlope_le hL) x y,
-      fun x => lineSup_mem hB (abs_clampSlope_le hL) x.2⟩
+          lineSup_lip subset_rfl hB (abs_clampSlope_le hL) x y,
+      fun x => lineSup_mem subset_rfl hB (abs_clampSlope_le hL) x.2⟩
   have hqc : ∀ n, cost μ (q n) ≤ D + 1 / (n + 1) := fun n => by
     rw [show q n = lipB hB hL (P n) from rfl, lipB, cost_toB hμ]
     exact (integral_mono_ae (integrable_of_mem hμ
-      (.of_continuous (continuous_of_convexOn (convexOn_lineSup hB (abs_clampSlope_le hL)))))
+      (.of_continuous (continuous_of_convexOn
+        (convexOn_lineSup subset_rfl hB (abs_clampSlope_le hL)))))
       (integrable_of_mem hμ (.of_continuous (hP n).continuous))
       (hμ.mono fun θ hθ => (lipPrice_spec hB hL hLip (hP n)).2 θ hθ)).trans (hPc n).le
   obtain ⟨g, -, φ, hφ, hlim⟩ := (isCompact_candidates B).tendsto_subseq hq

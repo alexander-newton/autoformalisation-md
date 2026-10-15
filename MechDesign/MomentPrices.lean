@@ -258,7 +258,7 @@ the lines of Lemma 7. -/
 lemma IsStatePrice.exists_slope (hp : IsStatePrice v p) (hv : IsPayoff v)
     (hLip : ∀ x ∈ Icc (0 : ℝ) 1, ∀ y ∈ Icc (0 : ℝ) 1, v y ≤ v x + L * |x - y|) :
     ∃ q : ℝ → ℝ, Measurable q ∧ (∀ x, |q x| ≤ L) ∧
-      ∀ y ∈ Icc (0 : ℝ) 1, lineSup v q y ≤ p y := by
+      ∀ y ∈ Icc (0 : ℝ) 1, lineSup I v q y ≤ p y := by
   have hL := nonneg_of_lip hLip
   obtain ⟨B, hB⟩ := hv.bdd
   obtain ⟨K, hK⟩ := hp.lipschitz
@@ -272,7 +272,7 @@ lemma IsStatePrice.exists_slope (hp : IsStatePrice v p) (hv : IsPayoff v)
     measurable_const.max ((subgrad_mono hh.convex).measurable.min measurable_const),
     abs_clampSlope_le hL, fun y hy => ?_⟩
   -- the clamped lines through `v` stay below the hull
-  calc lineSup v _ y ≤ lowerHull L g y := (lipPrice_spec hB hL hLip hh).2 y hy
+  calc lineSup I v _ y ≤ lowerHull L g y := (lipPrice_spec hB hL hLip hh).2 y hy
     _ ≤ g ⟨y, hy⟩ := lowerHull_le hL g ⟨y, hy⟩
     _ = p y := hg _
 
@@ -313,18 +313,25 @@ lemma eqOn_support_of_le (hp : IsStatePrice v p) (hopt : ∫ x, p x ∂μ = stat
     eqOn_support_of_ae_eq hc (lipschitzWith_extend hK).continuous hae hx
 
 omit [IsProbabilityMeasure μ] hμ in
-/-- **Complementary slackness for prices for moments**: if a signal pays the cost of the
-supremum of lines `pM = lineSup v q`, its states lie on the lines at their posterior means. -/
-lemma ae_line_eq {q : ℝ → ℝ} (hq : Measurable q) (hqL : ∀ x, |q x| ≤ L) {S : Signal}
-    (h : S.value v = ∫ θ, lineSup v q θ ∂S.prior) :
-    ∀ᵐ z ∂S.π, lineSup v q z.1 = v z.2 + q z.2 * (z.1 - z.2) := by
-  obtain ⟨B, hB⟩ := hv.bdd
-  have hc := continuous_of_convexOn (convexOn_lineSup hB hqL)
-  have hle : (fun z : ℝ × ℝ => v z.2 + q z.2 * (z.1 - z.2)) ≤ᵐ[S.π] fun z => lineSup v q z.1 :=
-    S.mean_mem.mono fun z hz => line_le_lineSup hB hqL ⟨z.2, hz⟩ z.1
-  -- the lines integrate to the value, the price to its cost: the gap vanishes
+/-- **Unbiased lines**: if the states of a signal lie on lines `v m + q m (θ - m)` through its
+posterior means, its value is the cost of the price. -/
+lemma value_eq_of_ae_line {S : Signal} {pM q : ℝ → ℝ} (hc : Continuous pM) (hq : Measurable q)
+    (hqL : ∀ x, |q x| ≤ L) (hae : ∀ᵐ z ∂S.π, pM z.1 = v z.2 + q z.2 * (z.1 - z.2)) :
+    S.value v = ∫ θ, pM θ ∂S.prior := by
+  rw [Signal.integral_prior hc, integral_congr_ae hae,
+    Signal.integral_add_mul_sub (Signal.integrable_payoff hv) hq hqL]
+  rfl
+
+omit [IsProbabilityMeasure μ] hμ in
+/-- **Tight lines**: if lines `v m + q m (θ - m)` stay below a price, and a signal pays its full
+cost, then the states lie on the lines almost surely. -/
+lemma ae_line_eq_of_le {S : Signal} {pM q : ℝ → ℝ} (hc : Continuous pM) (hq : Measurable q)
+    (hqL : ∀ x, |q x| ≤ L) (hle : ∀ᵐ z ∂S.π, v z.2 + q z.2 * (z.1 - z.2) ≤ pM z.1)
+    (h : S.value v = ∫ θ, pM θ ∂S.prior) :
+    ∀ᵐ z ∂S.π, pM z.1 = v z.2 + q z.2 * (z.1 - z.2) := by
   have hi : Integrable (fun z : ℝ × ℝ => v z.2 + q z.2 * (z.1 - z.2)) S.π :=
     (Signal.integrable_payoff hv).add (Signal.integrable_mul_sub hq hqL)
+  -- the lines integrate to the value, the price to its cost: the gap vanishes
   refine ((integral_eq_iff_of_ae_le hi (Signal.integrable_comp hc continuous_fst S.state_mem)
     hle).1 ?_).mono fun z hz => hz.symm
   rw [Signal.integral_add_mul_sub (Signal.integrable_payoff hv) hq hqL,
@@ -350,16 +357,18 @@ theorem momentPrice_spec
   obtain ⟨q, hq, hqL, hle⟩ := hp.exists_slope hv hLip
   have hpr := isPrice_lineSup hB hqL
   have hc := continuous_of_convexOn hpr.convex
-  -- `pM = lineSup v q` is a price below `p`, hence equal to it on the support
+  -- `pM = lineSup I v q` is a price below `p`, hence equal to it on the support
   have heq := eqOn_support_of_le hμ hv hp hopt hpr.isStatePrice hc hle
-  have hcost : ∫ ω, lineSup v q ω ∂μ = ∫ ω, p ω ∂μ :=
+  have hcost : ∫ ω, lineSup I v q ω ∂μ = ∫ ω, p ω ∂μ :=
     integral_congr_ae (ae_eq_of_eqOn_support heq)
-  refine ⟨lineSup v q, q, heq, ⟨hpr.convex, lineSup_lip hB hqL, hpr.le⟩, ⟨hq, hqL, fun _ => rfl⟩,
+  refine ⟨lineSup I v q, q, heq, ⟨hpr.convex, lineSup_lip subset_rfl hB hqL, hpr.le⟩,
+    ⟨hq, hqL, fun _ => rfl⟩,
     fun S hS hSopt => ?_⟩
   -- an optimal signal achieves the dual value, which is the cost of `pM`
-  have hval : S.value v = ∫ ω, lineSup v q ω ∂μ := by
+  have hval : S.value v = ∫ ω, lineSup I v q ω ∂μ := by
     rw [hcost, hopt, S.value_eq_stateValue_of_lip hLip hμ hv hS hSopt]
-  exact ⟨hval, ae_line_eq hv hq hqL (hS ▸ hval)⟩
+  exact ⟨hval, ae_line_eq_of_le hv hc hq hqL
+    (S.mean_mem.mono fun z hz => line_le_lineSup subset_rfl hB hqL ⟨z.2, hz⟩ z.1) (hS ▸ hval)⟩
 
 omit [IsProbabilityMeasure μ] hμ in
 /-- **Theorem 5, converse via (i)**: a convex price for moments above `v` that a signal pays in
@@ -378,14 +387,12 @@ theorem optimal_of_momentSlope {S : Signal} (hS : S.prior = μ) {pM q : ℝ → 
     (hae : ∀ᵐ z ∂S.π, pM z.1 = v z.2 + q z.2 * (z.1 - z.2)) :
     ∀ S' : Signal, S'.prior = μ → S'.value v ≤ S.value v := by
   obtain ⟨B, hB⟩ := hv.bdd
-  have hpM' : pM = lineSup v q := funext hpM
+  have hpM' : pM = lineSup I v q := funext hpM
   subst hpM'
   have hpr := isPrice_lineSup hB hqL
   -- the lines are unbiased, so the signal pays the cost of `pM`
-  refine optimal_of_momentPrice hv hpr.convex hpr.le ?_
-  rw [← hS, Signal.integral_prior (continuous_of_convexOn hpr.convex), integral_congr_ae hae,
-    Signal.integral_add_mul_sub (Signal.integrable_payoff hv) hq hqL]
-  rfl
+  exact optimal_of_momentPrice hv hpr.convex hpr.le
+    (hS ▸ value_eq_of_ae_line hv (continuous_of_convexOn hpr.convex) hq hqL hae)
 
 /-! ### Theorem 4 -/
 

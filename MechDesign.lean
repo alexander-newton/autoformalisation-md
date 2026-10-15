@@ -14,3 +14,4 @@ import MechDesign.PriceAttainment
 import MechDesign.StatePrices
 import MechDesign.DualAttainment
 import MechDesign.MomentPrices
+import MechDesign.TangentPrices

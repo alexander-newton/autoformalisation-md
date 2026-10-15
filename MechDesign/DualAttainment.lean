@@ -75,6 +75,22 @@ lemma eq_zero_of_forall_lt (f : E × ℝ →L[ℝ] ℝ) {u : ℝ} (h : ∀ x : E
   have h2 := nonpos_of_forall_le (b := -f (x, 0)) (u := u) fun k _ => by linarith [hk (-k)]
   linarith
 
+/-- **The separating hyperplane is not vertical**: pushing up in `t` inside the cone gives
+`f (0, 1) ≤ 0`, and `f (0, 1) = 0` would make `f` vanish, against the separation at `(x₀, t₀)`. -/
+lemma slope_neg {A : Set (E × ℝ)} {x₀ : E} {t₀ L u : ℝ} {f : E × ℝ →L[ℝ] ℝ}
+    (h₀ : (x₀, t₀) ∈ A) (hfA : ∀ a ∈ A, u ≤ f a)
+    (hB : ∀ x (s : ℝ), 0 < s → f (x, 0) + (t₀ + L * ‖x - x₀‖ + s) * f (0, 1) < u) :
+    f (0, 1) < 0 := by
+  set c := f (0, 1)
+  have hc0 : c ≤ 0 := Duality.nonpos_of_forall_lt (a := f (x₀, 0) + (t₀ + 1) * c) (u := u)
+    fun s hs => by have := hB x₀ (1 + s) (by linarith); simp at this; linarith
+  refine hc0.lt_of_ne fun hz => ?_
+  have hzero := eq_zero_of_forall_lt f fun x => by
+    have := hB x 1 one_pos; rwa [hz, mul_zero, add_zero] at this
+  have h1 := hfA _ h₀; rw [apply_prod_eq, hzero, ← hz] at h1
+  have h2 := hB x₀ 1 one_pos; rw [hzero, ← hz] at h2
+  simp at h1 h2; linarith
+
 /-- **Gale's theorem** (Gale 1967): if a convex set `A` of points `(x, t)` lies below the cone
 `t ≤ t₀ + L ‖x - x₀‖` and contains `(x₀, t₀)`, it lies below a hyperplane through `(x₀, t₀)`
 whose slope has norm at most `L`. Separate `A` from the open cone above. -/
@@ -88,15 +104,7 @@ theorem gale {A : Set (E × ℝ)} (hA : Convex ℝ A) {x₀ : E} {t₀ L : ℝ} 
   -- in coordinates, the cone gives `f (x, 0) + t c < u` above `t₀ + L ‖x - x₀‖`
   have hB : ∀ x (s : ℝ), 0 < s → f (x, 0) + (t₀ + L * ‖x - x₀‖ + s) * c < u := fun x s hs => by
     rw [← apply_prod_eq]; exact hfB _ (by simp only [coneAbove, mem_ofPred_eq]; linarith)
-  -- `c < 0`: pushing up in `t` gives `c ≤ 0`, and `c = 0` would make `f` vanish
-  have hc0 : c ≤ 0 := Duality.nonpos_of_forall_lt (a := f (x₀, 0) + (t₀ + 1) * c) (u := u)
-    fun s hs => by have := hB x₀ (1 + s) (by linarith); simp at this; linarith
-  have hc : c < 0 := hc0.lt_of_ne fun hz => by
-    have hzero := eq_zero_of_forall_lt f fun x => by
-      have := hB x 1 one_pos; rwa [hz, mul_zero, add_zero] at this
-    have h1 := hfA _ h₀; rw [apply_prod_eq, hzero, ← hz] at h1
-    have h2 := hB x₀ 1 one_pos; rw [hzero, ← hz] at h2
-    simp at h1 h2; linarith
+  have hc := slope_neg h₀ hfA hB
   -- normalise: `H = f (·, 0) / (-c)`; then `t ≤ H x - u/(-c)` on `A` and `≥` on the cone
   set H : E →L[ℝ] ℝ := (-c)⁻¹ • f.comp (ContinuousLinearMap.inl ℝ E ℝ)
   have hH : ∀ x, H x = f (x, 0) / (-c) := fun x => by simp [H, div_eq_inv_mul]
@@ -372,8 +380,8 @@ lemma lipschitzWith_extend {p : ℝ → ℝ} {K : NNReal} (hK : LipschitzOnWith 
 
 omit hμ hv hvu in
 /-- An `L`-Lipschitz function, recentred at `0` and divided by `L > 0`, is a test function. -/
-noncomputable def TestFn.ofLip {P : ℝ → ℝ} {L : ℝ} (hP : ∀ x y, P x ≤ P y + L * |x - y|) (hL : 0 < L) :
-    TestFn :=
+noncomputable def TestFn.ofLip {P : ℝ → ℝ} {L : ℝ} (hP : ∀ x y, P x ≤ P y + L * |x - y|)
+    (hL : 0 < L) : TestFn :=
   ⟨fun x => (P x - P 0) / L, LipschitzWith.of_dist_le_mul fun x y => by
     have h2 := hP y x
     rw [abs_sub_comm] at h2
