@@ -22,6 +22,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 | **Kolotilin (2018); Dworczak–Martini (2019)**: strong persuasion duality, continuum of states (posterior-mean case of Dworczak–Kolotilin 2024) | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue`, `priceValue_of_convexOn` |
 | **Strassen (1965) on [0, 1]**: every distribution of posterior means comes from a signal; an optimal signal exists | `Strassen.lean` | `MeanPersuasion.PosteriorMeans.exists_signal`, `exists_optimal_signal` |
+| **The best price exists** for Lipschitz V (dual attainment) | `PriceAttainment.lean` | `MeanPersuasion.exists_optimal_price` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
@@ -186,6 +187,18 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
   Riesz–Markov–Kakutani makes it a measure, and the mean condition passes from continuous to
   measurable test functions by comparing two weighted laws of m (`mean_eq_of_continuous`).
 
+### The best price exists for Lipschitz payoffs
+* **Dual attainment** (`exists_optimal_price`). If V is L-Lipschitz on [0, 1], some price costs
+  exactly the dual value.
+* **The proof.** Replace a price p by `lipPrice`: the supremum over y ∈ [0, 1] of the lines
+  through (y, V(y)) whose slope is the slope of p at y, clamped to [−L, L]. On the side where
+  clamping matters, the line falls at rate L, so it stays below V and hence below p; elsewhere
+  convexity of p keeps it below p. So `lipPrice` is again a price, no costlier, L-Lipschitz and
+  bounded. By Arzelà–Ascoli (`isCompact_candidates`) a minimising sequence of these converges
+  uniformly on [0, 1]. The limit keeps a line of slope in [−L, L] through every point of V
+  below it (`Supported`), so the supremum of all such lines below it (`lowerHull`) is a price,
+  and it costs at most the dual value.
+
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
   nonnegativity is not needed by the proofs.
@@ -279,4 +292,5 @@ Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
-* Attainment of the dual beyond Lipschitz V (it can fail with prices convex on ℝ).
+* Attainment of the dual beyond Lipschitz V (it can fail with prices convex on ℝ), e.g. with
+  prices convex on [0, 1] only.

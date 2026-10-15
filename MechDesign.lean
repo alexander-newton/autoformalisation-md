@@ -10,3 +10,4 @@ import MechDesign.LimitedCommitment
 import MechDesign.MeanPersuasion
 import MechDesign.MeanDuality
 import MechDesign.Strassen
+import MechDesign.PriceAttainment

@@ -74,8 +74,6 @@ noncomputable def testVal (μ ν : Measure ℝ) [IsFiniteMeasure μ] [IsFiniteMe
     simp only [Prod.smul_fst, Prod.smul_snd, extI_smul, Pi.smul_apply, smul_eq_mul,
       RingHom.id_apply, integral_const_mul]; ring
 
-lemma abs_le_one_of_mem (x : I) : |(x : ℝ)| ≤ 1 := abs_le.2 ⟨by linarith [x.2.1], x.2.2⟩
-
 /-- The **envelope** of a test function: `c(θ) = sup_m (-g m - h m (θ - m))`, the least
 function forced on `f` by `f(θ) + g(m) + h(m) (θ - m) ≥ 0`. -/
 noncomputable def envelope (g h : C(I, ℝ)) (θ : ℝ) : ℝ := ⨆ m : I, (-g m - h m * (θ - m))

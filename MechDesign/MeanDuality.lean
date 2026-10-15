@@ -102,6 +102,8 @@ lemma priceValue_le (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayo
 /-- A continuous function on `ℝ`, restricted to `[0, 1]`. -/
 def onI (f : ℝ → ℝ) (hf : Continuous f) : C(I, ℝ) := ⟨fun x => f x, hf.comp continuous_subtype_val⟩
 
+lemma abs_le_one_of_mem (x : I) : |(x : ℝ)| ≤ 1 := abs_le.2 ⟨by linarith [x.2.1], x.2.2⟩
+
 lemma onI_zero : onI (fun _ => (0 : ℝ)) continuous_const = 0 := by ext; simp [onI]
 
 lemma onI_const (k : ℝ) : onI (fun _ => k) continuous_const = k • 1 := by ext; simp [onI]
