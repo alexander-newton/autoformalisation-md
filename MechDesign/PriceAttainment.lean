@@ -11,7 +11,8 @@ import Mathlib.Topology.Order.ProjIcc
 
 For an `L`-Lipschitz payoff `V`, the dual infimum `priceValue V μ` is attained by a price
 (`exists_optimal_price`). (With prices convex on all of `ℝ`, attainment can fail for
-non-Lipschitz `V`, e.g. `V m = -√m`.)
+non-Lipschitz `V`, e.g. `V m = -√m` with the uniform prior.) This is a special case of
+Dworczak–Martini (2019), who allow upper semicontinuous `V`.
 
 **Proof.** Replace any price `p` by `lipPrice`, the supremum over `y ∈ [0, 1]` of the lines
 through `(y, V y)` with the slope of `p` at `y` clamped to `[-L, L]`. It is again a price, lies
@@ -34,6 +35,11 @@ noncomputable def clampSlope (L : ℝ) (p : ℝ → ℝ) (y : ℝ) : ℝ := max 
 
 lemma abs_clampSlope_le (hL : 0 ≤ L) (y : ℝ) : |clampSlope L p y| ≤ L :=
   abs_le.2 ⟨le_max_left _ _, max_le (by linarith) (min_le_right _ _)⟩
+
+/-- A clamped line moves by at most `L |d|` over a step `d`. -/
+lemma clampSlope_mul_le (hL : 0 ≤ L) (y d : ℝ) : clampSlope L p y * d ≤ L * |d| :=
+  (le_abs_self _).trans (by
+    rw [abs_mul]; exact mul_le_mul_of_nonneg_right (abs_clampSlope_le hL y) (abs_nonneg d))
 
 /-- Where clamping changes the slope `s` to `c`, the line with slope `c` falls at rate `L`. -/
 lemma clamp_mul_le (hL : 0 ≤ L) (s d : ℝ) (h : d * (s - max (-L) (min s L)) < 0) :
@@ -72,10 +78,10 @@ lemma lipPrice_bdd (x : ℝ) : BddAbove (range fun y : I => V y + clampSlope L p
   ⟨B + L * (|x| + 1), by
     rintro _ ⟨y, rfl⟩
     have h1 := (le_abs_self _).trans (hB y y.2)
-    have h2 : |clampSlope L p y * (x - y)| ≤ L * (|x| + 1) := by
-      rw [abs_mul]; exact mul_le_mul (abs_clampSlope_le hL y)
-        ((abs_sub _ _).trans (by linarith [abs_le_one_of_mem y])) (abs_nonneg _) hL
-    linarith [le_abs_self (clampSlope L p y * (x - y))]⟩
+    have h2 := clampSlope_mul_le (p := p) hL y (x - y)
+    have h3 := mul_le_mul_of_nonneg_left ((abs_sub x y).trans
+      (by linarith [abs_le_one_of_mem y] : |x| + |(y : ℝ)| ≤ |x| + 1)) hL
+    linarith⟩
 
 lemma line_le_lipPrice (y : I) (x : ℝ) :
     V y + clampSlope L p y * (x - y) ≤ lipPrice L V p x :=
@@ -94,19 +100,17 @@ lemma convexOn_lipPrice : ConvexOn ℝ univ (lipPrice L V p) :=
 lemma lipPrice_lip (x x' : ℝ) : lipPrice L V p x ≤ lipPrice L V p x' + L * |x - x'| :=
   ciSup_le fun y => by
     have h1 := line_le_lipPrice (p := p) hB hL y x'
-    have h2 : clampSlope L p y * (x - x') ≤ L * |x - x'| := by
-      have := mul_le_mul_of_nonneg_right (abs_clampSlope_le (p := p) hL y) (abs_nonneg (x - x'))
-      rw [← abs_mul] at this; exact (le_abs_self _).trans this
+    have h2 := clampSlope_mul_le (p := p) hL y (x - x')
     linarith [show clampSlope L p y * (x - y) = clampSlope L p y * (x' - y)
       + clampSlope L p y * (x - x') by ring]
 
 lemma lipPrice_mem {x : ℝ} (hx : x ∈ Icc (0 : ℝ) 1) : lipPrice L V p x ∈ Icc (-B) (B + L) :=
   ⟨by linarith [line_le_lipPrice (p := p) hB hL ⟨x, hx⟩ x, neg_abs_le (V x), hB x hx],
     ciSup_le fun y => by
-      have h := mul_le_mul (abs_clampSlope_le (p := p) hL y) (show |x - y| ≤ 1 by
-        rw [abs_le]; constructor <;> linarith [hx.1, hx.2, y.2.1, y.2.2]) (abs_nonneg _) hL
-      rw [← abs_mul] at h
-      linarith [le_abs_self (clampSlope L p y * (x - y)), (le_abs_self _).trans (hB y y.2)]⟩
+      have h := clampSlope_mul_le (p := p) hL y (x - y)
+      have h1 := mul_le_mul_of_nonneg_left (show |x - y| ≤ 1 by
+        rw [abs_le]; constructor <;> linarith [hx.1, hx.2, y.2.1, y.2.2]) hL
+      linarith [(le_abs_self _).trans (hB y y.2)]⟩
 
 /-- `lipPrice` is a price, below `p` on `[0, 1]`. -/
 lemma lipPrice_spec (hLip : ∀ x ∈ Icc (0 : ℝ) 1, ∀ y ∈ Icc (0 : ℝ) 1,
@@ -132,6 +136,8 @@ noncomputable def lowerHull (L : ℝ) (g : I →ᵇ ℝ) (x : ℝ) : ℝ :=
 lemma abs_apply_le_norm (g : I →ᵇ ℝ) (x : I) : |g x| ≤ ‖g‖ :=
   (Real.norm_eq_abs _).symm.trans_le (g.norm_coe_le_norm x)
 
+lemma nonempty_Icc_neg (hL : 0 ≤ L) : Nonempty (Icc (-L) L) := ⟨⟨0, by linarith, hL⟩⟩
+
 section lowerHull
 
 variable (hL : 0 ≤ L) (g : I →ᵇ ℝ)
@@ -155,7 +161,7 @@ lemma lowerHull_bdd (x : ℝ) :
     linarith [le_abs_self ((b : ℝ) * x), le_abs_self (g 0), abs_apply_le_norm g 0]⟩
 
 lemma convexOn_lowerHull : ConvexOn ℝ univ (lowerHull L g) :=
-  have : Nonempty (Icc (-L) L) := ⟨⟨0, by linarith, hL⟩⟩
+  have := nonempty_Icc_neg hL
   ⟨convex_univ, fun x _ y _ s t hs ht hst => ciSup_le fun b => by
     have hx := le_ciSup (lowerHull_bdd hL g x) b
     have hy := le_ciSup (lowerHull_bdd hL g y) b
@@ -166,7 +172,7 @@ lemma convexOn_lowerHull : ConvexOn ℝ univ (lowerHull L g) :=
       _ ≤ _ := by gcongr⟩
 
 lemma lowerHull_le (x : I) : lowerHull L g x ≤ g x :=
-  have : Nonempty (Icc (-L) L) := ⟨⟨0, by linarith, hL⟩⟩
+  have := nonempty_Icc_neg hL
   ciSup_le fun b => by linarith [ciInf_le (lowerHull_inner_bdd hL g b) x]
 
 /-- **A supported `g` yields a price below it.** -/
@@ -257,6 +263,20 @@ lemma supported_of_tendsto {B : ℝ} (hB : ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ 
 
 variable [IsProbabilityMeasure μ]
 
+omit [IsProbabilityMeasure μ] in
+/-- **A minimising sequence of prices**: `∫ P n dμ < priceValue + 1 / (n + 1)`. -/
+lemma exists_minimising (hV : IsPayoff V) : ∃ P : ℕ → ℝ → ℝ, (∀ n, IsPrice V (P n)) ∧
+    ∀ n : ℕ, ∫ θ, P n θ ∂μ < priceValue V μ + 1 / (n + 1) := by
+  obtain ⟨B₀, hB₀⟩ := exists_isPrice_const hV
+  have : Nonempty {p // IsPrice V p} := ⟨⟨_, hB₀⟩⟩
+  have hseq : ∀ n : ℕ, ∃ p, IsPrice V p ∧ ∫ θ, p θ ∂μ < priceValue V μ + 1 / (n + 1) :=
+    fun n => by
+      obtain ⟨⟨p, hp⟩, h⟩ := exists_lt_of_ciInf_lt
+        (lt_add_of_pos_right (priceValue V μ) (by positivity : (0 : ℝ) < 1 / (n + 1)))
+      exact ⟨p, hp, h⟩
+  choose P hP hPc using hseq
+  exact ⟨P, hP, hPc⟩
+
 /-- **A supported limit**: the restrictions of a minimising sequence of Lipschitz prices have a
 uniform limit `g` that is supported and costs at most the dual value. -/
 lemma exists_supported (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayoff V) {B : ℝ}
@@ -264,14 +284,8 @@ lemma exists_supported (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsP
     (hLip : ∀ x ∈ Icc (0 : ℝ) 1, ∀ y ∈ Icc (0 : ℝ) 1, V y ≤ V x + L * |x - y|) :
     ∃ g : I →ᵇ ℝ, Supported V L g ∧ cost μ g ≤ priceValue V μ := by
   set D := priceValue V μ
-  obtain ⟨B₀, hB₀⟩ := exists_isPrice_const hV
-  have : Nonempty {p // IsPrice V p} := ⟨⟨_, hB₀⟩⟩
   -- a minimising sequence of prices, made Lipschitz and restricted to `[0, 1]`
-  have hseq : ∀ n : ℕ, ∃ p, IsPrice V p ∧ ∫ θ, p θ ∂μ < D + 1 / (n + 1) := fun n => by
-    obtain ⟨⟨p, hp⟩, h⟩ := exists_lt_of_ciInf_lt
-      (lt_add_of_pos_right D (by positivity : (0 : ℝ) < 1 / (n + 1)))
-    exact ⟨p, hp, h⟩
-  choose P hP hPc using hseq
+  obtain ⟨P, hP, hPc⟩ := exists_minimising (μ := μ) hV
   set q : ℕ → I →ᵇ ℝ := fun n => lipB hB hL (P n)
   have hq : ∀ n, q n ∈ candidates L B := fun n =>
     ⟨fun x y => by simpa [q, lipB, Subtype.dist_eq, Real.dist_eq] using lipPrice_lip hB hL x y,
@@ -293,9 +307,14 @@ lemma exists_supported (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsP
 
 /-- **The best price exists** when `V` is `L`-Lipschitz on `[0, 1]`: some price costs exactly
 the dual value. -/
-theorem exists_optimal_price (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayoff V) (hL : 0 ≤ L)
+theorem exists_optimal_price (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayoff V)
     (hLip : ∀ x ∈ Icc (0 : ℝ) 1, ∀ y ∈ Icc (0 : ℝ) 1, V y ≤ V x + L * |x - y|) :
     ∃ p, IsPrice V p ∧ ∫ θ, p θ ∂μ = priceValue V μ := by
+  -- the Lipschitz constant is nonnegative: compare the endpoints both ways
+  have hL : 0 ≤ L := by
+    have h1 := hLip 0 (by simp) 1 (by simp)
+    have h2 := hLip 1 (by simp) 0 (by simp)
+    norm_num at h1 h2; linarith
   obtain ⟨B, hB⟩ := hV.bdd
   obtain ⟨g, hg, hcost⟩ := exists_supported hμ hV hB hL hLip
   have hp := isPrice_lowerHull hL hg
