@@ -10,8 +10,9 @@ import Mathlib.Tactic.LinearCombination
 /-!
 # Persuasion with a continuum of states: the price duality (Dworczak–Kolotilin)
 
-The state `θ` lies in `[0, 1]` with an arbitrary prior, and the sender's payoff `V m` depends on
-the receiver's posterior mean `m` (Kolotilin 2018; Dworczak & Kolotilin 2024). A signal is
+The state `θ` lies in `[0, 1]` with an arbitrary prior. The sender's payoff `V m`, measurable
+and bounded (`IsPayoff`), depends on the receiver's posterior mean `m` (Kolotilin 2018;
+Dworczak & Kolotilin 2024). A signal is
 described by the joint law of `(θ, m)`; Bayes' rule says exactly that `m` is the conditional
 mean of `θ` given `m` (`Signal.mean_eq`).
 
@@ -20,9 +21,9 @@ A **price** is a convex function `p ≥ V` on `[0, 1]`, a price for each state.
   `∫ p dμ`. The one identity is that a posterior mean is unbiased:
   `E[g(m) (θ - m)] = 0` (`Signal.integral_mul_sub`). Integrating a supporting line of `p` at
   `m` then gives `E p(m) ≤ E p(θ)`.
-* **Complementary slackness** (`Signal.optimal_of_slack`): if `p = V` at every induced
-  posterior mean and `p` is affine on the states pooled into each mean, then the signal and
-  the price are both optimal.
+* **Verification theorem** (`Signal.optimal_of_slack`), the sufficiency of complementary
+  slackness: if `p = V` at every induced posterior mean and `p` is affine on the states pooled
+  into each mean, then the signal and the price are both optimal.
 * **Corollaries.** Full disclosure is optimal for convex `V` (`full_optimal`), no disclosure
   for concave `V` (`silent_optimal`).
 -/
@@ -80,6 +81,16 @@ structure IsPrice (V p : ℝ → ℝ) : Prop where
   convex : ConvexOn ℝ univ p
   le : ∀ x ∈ Icc (0 : ℝ) 1, V x ≤ p x
 
+/-- An admissible **sender payoff**: measurable and bounded on `[0, 1]`. It may jump, as a step
+payoff `1{m ≥ t}` does. -/
+structure IsPayoff (V : ℝ → ℝ) : Prop where
+  measurable : Measurable V
+  bdd : ∃ B, ∀ x ∈ Icc (0 : ℝ) 1, |V x| ≤ B
+
+lemma IsPayoff.of_continuous {V : ℝ → ℝ} (hV : Continuous V) : IsPayoff V :=
+  ⟨hV.measurable, (isCompact_Icc.exists_bound_of_continuousOn hV.continuousOn).imp
+    fun _ h x hx => h x hx⟩
+
 lemma IsPrice.continuous {V : ℝ → ℝ} (hp : IsPrice V p) : Continuous p :=
   continuousOn_univ.1 (hp.convex.continuousOn isOpen_univ)
 
@@ -103,6 +114,11 @@ lemma integrable_comp {f : ℝ → ℝ} (hf : Continuous f) {q : ℝ × ℝ → 
     (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1) : Integrable (fun z => f (q z)) S.π :=
   let ⟨C, hC⟩ := isCompact_Icc.exists_bound_of_continuousOn hf.continuousOn
   (integrable_const C).mono' (hf.comp hq).aestronglyMeasurable (hmem.mono fun _ hz => hC _ hz)
+
+lemma integrable_payoff {V : ℝ → ℝ} (hV : IsPayoff V) : Integrable (fun z => V z.2) S.π :=
+  let ⟨B, hB⟩ := hV.bdd
+  (integrable_const B).mono' (hV.measurable.comp measurable_snd).aestronglyMeasurable
+    (S.mean_mem.mono fun _ hz => hB _ hz)
 
 lemma integrable_mul {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1)
     {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
@@ -166,17 +182,17 @@ theorem integral_mean_le (hp : ConvexOn ℝ univ p) :
 variable {V : ℝ → ℝ}
 
 /-- **Weak duality**: no signal beats the expected cost of a price. -/
-theorem value_le (hV : Continuous V) (hp : IsPrice V p) : S.value V ≤ ∫ θ, p θ ∂S.prior := by
+theorem value_le (hV : IsPayoff V) (hp : IsPrice V p) : S.value V ≤ ∫ θ, p θ ∂S.prior := by
   rw [integral_prior hp.continuous]
-  calc S.value V ≤ ∫ z, p z.2 ∂S.π := integral_mono_ae
-        (integrable_comp hV continuous_snd S.mean_mem)
+  calc S.value V ≤ ∫ z, p z.2 ∂S.π := integral_mono_ae (integrable_payoff hV)
         (integrable_comp hp.continuous continuous_snd S.mean_mem)
         (S.mean_mem.mono fun z hz => hp.le _ hz)
     _ ≤ ∫ z, p z.1 ∂S.π := integral_mean_le hp.convex
 
-/-- **Complementary slackness** (Dworczak–Kolotilin): if the price equals `V` at every
-induced posterior mean, and is affine (with slope `ℓ m`) on the states pooled into each mean
-`m`, then the value of the signal equals the expected cost of the price. -/
+/-- **Sufficiency of complementary slackness** (Dworczak–Kolotilin): if the price equals `V` at
+every induced posterior mean, and is affine (with slope `ℓ m`) on the states pooled into each
+mean `m`, then the value of the signal equals the expected cost of the price. (The slope can
+always be taken to be `clampedSubgrad p`.) -/
 theorem value_eq_of_slack (hp : IsPrice V p) (hVp : ∀ᵐ z ∂S.π, V z.2 = p z.2)
     {ℓ : ℝ → ℝ} (hℓ : Measurable ℓ) {C : ℝ} (hC : ∀ x, |ℓ x| ≤ C)
     (haff : ∀ᵐ z ∂S.π, p z.1 = p z.2 + ℓ z.2 * (z.1 - z.2)) :
@@ -187,7 +203,7 @@ theorem value_eq_of_slack (hp : IsPrice V p) (hVp : ∀ᵐ z ∂S.π, V z.2 = p 
 
 /-- **Verification theorem**: under complementary slackness the signal is optimal among all
 signals with the same prior, and the price is optimal among all prices. -/
-theorem optimal_of_slack (hV : Continuous V) (hp : IsPrice V p)
+theorem optimal_of_slack (hV : IsPayoff V) (hp : IsPrice V p)
     (hVp : ∀ᵐ z ∂S.π, V z.2 = p z.2) {ℓ : ℝ → ℝ} (hℓ : Measurable ℓ) {C : ℝ}
     (hC : ∀ x, |ℓ x| ≤ C) (haff : ∀ᵐ z ∂S.π, p z.1 = p z.2 + ℓ z.2 * (z.1 - z.2)) :
     (∀ S' : Signal, S'.prior = S.prior → S'.value V ≤ S.value V) ∧
@@ -250,23 +266,23 @@ variable {V : ℝ → ℝ}
 theorem full_optimal (hV : ConvexOn ℝ univ V) (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1)
     (S : Signal) (hS : S.prior = μ) : S.value V ≤ (full μ hμ).value V := by
   have hp : IsPrice V V := ⟨hV, fun _ _ => le_rfl⟩
-  calc S.value V ≤ ∫ θ, V θ ∂μ := hS ▸ S.value_le hp.continuous hp
+  calc S.value V ≤ ∫ θ, V θ ∂μ := hS ▸ S.value_le (.of_continuous hp.continuous) hp
     _ = (full μ hμ).value V := by
       dsimp only [Signal.value, full]; rw [integral_map_snd μ (by fun_prop) hp.continuous]
 
-/-- **No disclosure is optimal when `V` is concave**: the tangent line at the prior mean is a
+/-- **No disclosure is optimal when `V` is concave**: a supporting line at the prior mean is a
 price that costs exactly `V` of the prior mean. -/
 theorem silent_optimal (hV : ConcaveOn ℝ univ V) (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1)
     (S : Signal) (hS : S.prior = μ) : S.value V ≤ (silent hμ).value V := by
   set c := priorMean μ
   set t := subgrad (-V) c
-  -- the tangent line `ℓ` of `V` at the prior mean is a price
+  -- a supporting line of `V` at the prior mean is a price
   have hp : IsPrice V fun x => V c + -t * (x - c) := ⟨convexOn_affine _ _ _, fun x _ => by
     have := le_support hV.neg c x; simp only [Pi.neg_apply] at this; linarith⟩
   have hVc : Continuous V := continuousOn_univ.1 (hV.continuousOn isOpen_univ)
   have hi : Integrable (fun θ : ℝ => θ) μ := (integrable_const (1 : ℝ)).mono'
     measurable_id.aestronglyMeasurable (hμ.mono fun θ h => abs_le.2 ⟨by linarith [h.1], h.2⟩)
-  calc S.value V ≤ ∫ θ, V c + -t * (θ - c) ∂μ := hS ▸ S.value_le hVc hp
+  calc S.value V ≤ ∫ θ, V c + -t * (θ - c) ∂μ := hS ▸ S.value_le (.of_continuous hVc) hp
     _ = V c := by
       have h1 : Integrable (fun θ : ℝ => θ - c) μ := hi.sub (integrable_const c)
       rw [integral_add (integrable_const _) (h1.const_mul _), integral_const_mul,
