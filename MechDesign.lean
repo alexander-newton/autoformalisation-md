@@ -9,3 +9,4 @@ import MechDesign.RevenueCurve
 import MechDesign.LimitedCommitment
 import MechDesign.MeanPersuasion
 import MechDesign.MeanDuality
+import MechDesign.Strassen

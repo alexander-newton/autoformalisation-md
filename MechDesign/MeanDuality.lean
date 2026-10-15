@@ -337,12 +337,12 @@ lemma functional_spec {Λ : C(I, ℝ) →L[ℝ] ℝ} {D : ℝ}
     linarith
   linarith
 
-/-- **Riesz–Markov–Kakutani on `[0, 1]`**: a positive functional with `Λ 1 = 1` is integration
-against a probability measure on `[0, 1]`. -/
-lemma exists_measure (Λ : C(I, ℝ) →L[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0 ≤ Λ h) (h1 : Λ 1 = 1) :
-    ∃ ν : Measure ℝ, IsProbabilityMeasure ν ∧ (∀ᵐ m ∂ν, m ∈ Icc (0 : ℝ) 1) ∧
-      ∀ f (hf : Continuous f), ∫ m, f m ∂ν = Λ (onI f hf) := by
-  let Λc : C_c(I, ℝ) →ₚ[ℝ] ℝ :=
+/-- **Riesz–Markov–Kakutani on a compact space**: a positive functional on `C(X, ℝ)` is
+integration against a finite measure. -/
+lemma exists_measure_of_pos {X : Type*} [TopologicalSpace X] [CompactSpace X] [T2Space X]
+    [MeasurableSpace X] [BorelSpace X] (Λ : C(X, ℝ) →ₗ[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0 ≤ Λ h) :
+    ∃ π : Measure X, IsFiniteMeasure π ∧ ∀ f : C(X, ℝ), ∫ x, f x ∂π = Λ f := by
+  let Λc : C_c(X, ℝ) →ₚ[ℝ] ℝ :=
     { toFun g := Λ ⟨g, g.continuous⟩
       map_add' g g' := by rw [← map_add]; rfl
       map_smul' k g := by rw [RingHom.id_apply, ← map_smul]; rfl
@@ -350,17 +350,28 @@ lemma exists_measure (Λ : C(I, ℝ) →L[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0
         have := hpos (⟨g', g'.continuous⟩ - ⟨g, g.continuous⟩)
           (ContinuousMap.le_def.2 fun x => by simpa using hgg' x)
         rw [map_sub] at this; linarith }
-  have hint : ∀ f (hf : Continuous f),
-      ∫ m, f m ∂((RealRMK.rieszMeasure Λc).map Subtype.val) = Λ (onI f hf) := fun f hf => by
-    rw [integral_map continuous_subtype_val.measurable.aemeasurable hf.aestronglyMeasurable]
-    exact RealRMK.integral_rieszMeasure Λc ⟨onI f hf, HasCompactSupport.of_compactSpace _⟩
-  refine ⟨_, ⟨?_⟩, (ae_map_iff continuous_subtype_val.measurable.aemeasurable
-    measurableSet_Icc).2 (ae_of_all _ fun x => x.2), hint⟩
-  -- the total mass is `Λ 1 = 1`
-  have := hint (fun _ => 1) continuous_const
-  rw [integral_const, smul_eq_mul, mul_one, onI_const, one_smul, h1] at this
-  rw [← ENNReal.ofReal_toReal (measure_ne_top _ univ), ← measureReal_def, this,
-    ENNReal.ofReal_one]
+  exact ⟨RealRMK.rieszMeasure Λc, inferInstance, fun f =>
+    RealRMK.integral_rieszMeasure Λc ⟨f, HasCompactSupport.of_compactSpace _⟩⟩
+
+/-- A finite measure of total integral one is a probability measure. -/
+lemma isProbabilityMeasure_of_integral_one {X : Type*} [MeasurableSpace X] {π : Measure X}
+    [IsFiniteMeasure π] (h : ∫ _, (1 : ℝ) ∂π = 1) : IsProbabilityMeasure π := by
+  rw [integral_const, smul_eq_mul, mul_one] at h
+  exact ⟨by rw [← ENNReal.ofReal_toReal (measure_ne_top _ univ), ← measureReal_def, h,
+    ENNReal.ofReal_one]⟩
+
+/-- **Riesz–Markov–Kakutani on `[0, 1]`**: a positive functional with `Λ 1 = 1` is integration
+against a probability measure on `[0, 1]`. -/
+lemma exists_measure (Λ : C(I, ℝ) →L[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0 ≤ Λ h) (h1 : Λ 1 = 1) :
+    ∃ ν : Measure ℝ, IsProbabilityMeasure ν ∧ (∀ᵐ m ∂ν, m ∈ Icc (0 : ℝ) 1) ∧
+      ∀ f (hf : Continuous f), ∫ m, f m ∂ν = Λ (onI f hf) := by
+  obtain ⟨νI, hfin, hint⟩ := exists_measure_of_pos Λ.toLinearMap hpos
+  have hm := continuous_subtype_val.measurable.aemeasurable (μ := νI)
+  have hint' : ∀ f (hf : Continuous f), ∫ m, f m ∂(νI.map Subtype.val) = Λ (onI f hf) :=
+    fun f hf => by rw [integral_map hm hf.aestronglyMeasurable]; exact hint (onI f hf)
+  refine ⟨_, isProbabilityMeasure_of_integral_one ?_,
+    (ae_map_iff hm measurableSet_Icc).2 (ae_of_all _ fun x => x.2), hint'⟩
+  rw [hint' _ continuous_const, onI_const, one_smul, h1]
 
 /-! ### Approximating `V` from above -/
 

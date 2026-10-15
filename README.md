@@ -21,6 +21,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
 | **Kolotilin (2018); Dworczak–Martini (2019)**: strong persuasion duality, continuum of states (posterior-mean case of Dworczak–Kolotilin 2024) | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue`, `priceValue_of_convexOn` |
+| **Strassen (1965) on [0, 1]**: every distribution of posterior means comes from a signal; an optimal signal exists | `Strassen.lean` | `MeanPersuasion.PosteriorMeans.exists_signal`, `exists_optimal_signal` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
@@ -171,6 +172,20 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
 * **Signals** (`Signal.value_le_priceValue`). No signal is worth more than the dual value.
 * **Sanity check** (`priceValue_of_convexOn`). For convex V the dual value is ∫ V dμ.
 
+### Strassen's theorem: optimal signals
+* **Every distribution of posterior means comes from a signal** (`PosteriorMeans.exists_signal`).
+  If ν is a mean-preserving contraction of μ, there is a joint law of (θ, m) with marginals μ
+  and ν in which m is the conditional mean of θ.
+* **An optimal signal exists** (`exists_optimal_signal`), for bounded upper semicontinuous V,
+  and its value is the dual value.
+* **The proof.** A coupling is a positive functional on C([0, 1]²) that gives each test function
+  f(θ) + g(m) + h(m)(θ − m) the value ∫ f dμ + ∫ g dν. That value is well defined and positive
+  by the *dual inequality* (`testVal_nonneg`): if the test function is nonnegative, its
+  `envelope` c(θ) = sup_m (−g(m) − h(m)(θ − m)) is convex, below f and above −g, so
+  ∫ f dμ ≥ ∫ c dμ ≥ ∫ c dν ≥ −∫ g dν. M. Riesz's extension theorem extends it positively,
+  Riesz–Markov–Kakutani makes it a measure, and the mean condition passes from continuous to
+  measurable test functions by comparing two weighted laws of m (`mean_eq_of_continuous`).
+
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
   nonnegativity is not needed by the proofs.
@@ -215,11 +230,9 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
 * **Persuasion, finite case** (`Persuasion.lean`). Finite states and actions. The dual infimum
   is shown to equal the value but is not shown to be attained.
 * **Persuasion, continuum of states** (`MeanPersuasion.lean`, `MeanDuality.lean`).
-  * **Strong duality is over distributions of posterior means**, as in Kolotilin (2018) and
-    Dworczak–Martini (2019), not over signals. That every distribution of posterior means is
-    induced by a signal is Strassen's theorem, which is not formalised. So
-    `strong_duality` gives an optimal ν, and `Signal.value_le_priceValue` bounds every signal,
-    but no optimal signal is constructed.
+  * Strong duality is stated over distributions of posterior means, as in Kolotilin (2018)
+    and Dworczak–Martini (2019); Strassen's theorem on [0, 1] (`Strassen.lean`) turns the
+    optimal one into an optimal signal. Strassen is proved only for laws on [0, 1].
   * Strong duality needs V upper semicontinuous on ℝ (any V upper semicontinuous on [0, 1]
     extends, e.g. by composing with the projection onto [0, 1]) and bounded on [0, 1]. An
     upper semicontinuous V on [0, 1] is bounded above but may be unbounded below; that case is
@@ -266,5 +279,4 @@ Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
-* Strassen's theorem in one dimension (an optimal signal, not just an optimal distribution of
-  posterior means), attainment of the dual, and upper semicontinuous V.
+* Attainment of the dual beyond Lipschitz V (it can fail with prices convex on ℝ).
