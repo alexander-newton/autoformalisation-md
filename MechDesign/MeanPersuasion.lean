@@ -124,15 +124,24 @@ lemma integrable_payoff {V : ℝ → ℝ} (hV : IsPayoff V) : Integrable (fun z 
   (integrable_const B).mono' (hV.measurable.comp measurable_snd).aestronglyMeasurable
     (S.mean_mem.mono fun _ hz => hB _ hz)
 
-lemma integrable_mul {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1)
+omit S in
+/-- A weight in `[0, 1]` times a bounded function of the mean is integrable, for any finite
+law of `(θ, m)`. -/
+lemma _root_.MeanPersuasion.integrable_mul_of_mem {π : Measure (ℝ × ℝ)} [IsFiniteMeasure π]
+    {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ z ∂π, q z ∈ Icc (0 : ℝ) 1)
     {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
-    Integrable (fun z => q z * g z.2) S.π :=
+    Integrable (fun z => q z * g z.2) π :=
   (integrable_const C).mono' (hq.measurable.mul (hg.comp measurable_snd)).aestronglyMeasurable
     (hmem.mono fun z hz => calc
       _ = |q z| * |g z.2| := by rw [Real.norm_eq_abs, abs_mul]
       _ ≤ 1 * C := mul_le_mul (abs_le.2 ⟨by linarith [hz.1], hz.2⟩) (hC _) (abs_nonneg _)
           zero_le_one
       _ = C := one_mul C)
+
+lemma integrable_mul {q : ℝ × ℝ → ℝ} (hq : Continuous q) (hmem : ∀ᵐ z ∂S.π, q z ∈ Icc (0 : ℝ) 1)
+    {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
+    Integrable (fun z => q z * g z.2) S.π :=
+  integrable_mul_of_mem hq hmem hg hC
 
 lemma integrable_mul_sub {g : ℝ → ℝ} (hg : Measurable g) {C : ℝ} (hC : ∀ x, |g x| ≤ C) :
     Integrable (fun z => g z.2 * (z.1 - z.2)) S.π :=

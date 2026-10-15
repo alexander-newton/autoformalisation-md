@@ -242,25 +242,28 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     than a separate participation decision.
 * **Persuasion, finite case** (`Persuasion.lean`). Finite states and actions. The dual infimum
   is shown to equal the value but is not shown to be attained.
-* **Persuasion, continuum of states** (`MeanPersuasion.lean`, `MeanDuality.lean`).
+* **Persuasion, continuum of states** (`MeanPersuasion.lean`, `MeanDuality.lean`,
+  `Strassen.lean`, `PriceAttainment.lean`).
   * Strong duality is stated over distributions of posterior means, as in Kolotilin (2018)
     and Dworczak–Martini (2019); Strassen's theorem on [0, 1] (`Strassen.lean`) turns the
     optimal one into an optimal signal. Strassen is proved only for laws on [0, 1].
-  * Strong duality needs V upper semicontinuous on ℝ (any V upper semicontinuous on [0, 1]
-    extends, e.g. by composing with the projection onto [0, 1]) and bounded on [0, 1]. An
-    upper semicontinuous V on [0, 1] is bounded above but may be unbounded below; that case is
-    excluded.
-  * The dual infimum is not shown to be attained. With prices convex on all of ℝ it can
-    genuinely fail to be attained even where the papers' dual is: for V(m) = −√m any price
+  * **Payoffs.** Strong duality and the optimal signal need V upper semicontinuous on ℝ (any
+    V upper semicontinuous on [0, 1] extends, e.g. by composing with the projection onto
+    [0, 1]) and `IsPayoff V`: measurable (already implied by upper semicontinuity) and bounded
+    on [0, 1]. An upper semicontinuous V on [0, 1] is bounded above, so the only extra
+    assumption is a lower bound; DK allow V unbounded below.
+  * **Dual attainment** is proved only for Lipschitz V (`exists_optimal_price`); DM 2019 prove
+    it for upper semicontinuous V. With prices convex on all of ℝ it can genuinely fail: with
+    the uniform prior (or any prior of full support on [0, 1]) and V(m) = −√m, any price
     attaining the value would equal V on (0, 1] and so need infinite slope at 0.
+  * In `PosteriorMeans.exists_signal` the instance `IsProbabilityMeasure μ` is redundant: a
+    distribution of posterior means for μ already forces μ to be a probability measure.
   * The sender's payoff depends on the posterior mean only (the "linear" case).
   * Prices must be convex on all of ℝ, not just on [0, 1]. This excludes convex functions on
     [0, 1] with infinite slope at an endpoint. DK allow any p with ∫ p dν ≥ V(ν) for every
     posterior ν; for posterior-mean payoffs the convex envelope of such a p is again a price,
     so convexity loses nothing beyond the endpoint-slope caveat. "The price is optimal among
     all prices" in `optimal_of_slack` compares p with convex prices only.
-  * V must be measurable and bounded on [0, 1]; DK allow upper semicontinuous V, which on
-    [0, 1] is bounded above but may be unbounded below.
   * The corollaries need V convex (`full_optimal`) or concave (`silent_optimal`) on all of ℝ.
     So V(m) = √m, concave on [0, 1] with infinite slope at 0, is not covered by
     `silent_optimal`.

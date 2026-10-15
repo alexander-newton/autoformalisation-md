@@ -102,6 +102,11 @@ lemma priceValue_le (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (hV : IsPayo
 /-- A continuous function on `ℝ`, restricted to `[0, 1]`. -/
 def onI (f : ℝ → ℝ) (hf : Continuous f) : C(I, ℝ) := ⟨fun x => f x, hf.comp continuous_subtype_val⟩
 
+/-- A continuous function on a compact space is bounded by its norm. -/
+lemma abs_apply_le_norm' {X : Type*} [TopologicalSpace X] [CompactSpace X] (f : C(X, ℝ))
+    (x : X) : |f x| ≤ ‖f‖ :=
+  (Real.norm_eq_abs _).symm.trans_le (f.norm_coe_le_norm x)
+
 lemma abs_le_one_of_mem (x : I) : |(x : ℝ)| ≤ 1 := abs_le.2 ⟨by linarith [x.2.1], x.2.2⟩
 
 lemma onI_zero : onI (fun _ => (0 : ℝ)) continuous_const = 0 := by ext; simp [onI]
@@ -207,7 +212,7 @@ lemma nonpos_of_forall_le {b u : ℝ} (h : ∀ s : ℝ, 0 ≤ s → s * b ≤ u)
 lemma eq_zero_of_pos (L : C(I, ℝ) →L[ℝ] ℝ) (hpos : ∀ h, 0 ≤ h → 0 ≤ L h) (h1 : L 1 = 0)
     (g : C(I, ℝ)) : L g = 0 := by
   -- `g` lies between `-‖g‖` and `‖g‖`
-  have hb : ∀ x, |g x| ≤ ‖g‖ := fun x => (Real.norm_eq_abs _).symm.trans_le (g.norm_coe_le_norm x)
+  have hb := abs_apply_le_norm' g
   have hu := hpos (‖g‖ • 1 - g) (ContinuousMap.le_def.2 fun x => by
     simpa using (le_abs_self _).trans (hb x))
   have hl := hpos (g + ‖g‖ • 1) (ContinuousMap.le_def.2 fun x => by

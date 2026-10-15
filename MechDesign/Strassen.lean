@@ -44,7 +44,7 @@ lemma extI_add (f g : C(I, ℝ)) : extI (f + g) = extI f + extI g := rfl
 lemma extI_smul (k : ℝ) (f : C(I, ℝ)) : extI (k • f) = k • extI f := rfl
 
 lemma abs_extI_le (f : C(I, ℝ)) (x : ℝ) : |extI f x| ≤ ‖f‖ :=
-  (Real.norm_eq_abs _).symm.trans_le (f.norm_coe_le_norm _)
+  abs_apply_le_norm' f _
 
 lemma integrable_extI {ν : Measure ℝ} [IsFiniteMeasure ν] (f : C(I, ℝ)) :
     Integrable (extI f) ν :=
@@ -74,6 +74,10 @@ noncomputable def testVal (μ ν : Measure ℝ) [IsFiniteMeasure μ] [IsFiniteMe
     simp only [Prod.smul_fst, Prod.smul_snd, extI_smul, Pi.smul_apply, smul_eq_mul,
       RingHom.id_apply, integral_const_mul]; ring
 
+@[simp] lemma testVal_apply (μ ν : Measure ℝ) [IsFiniteMeasure μ] [IsFiniteMeasure ν]
+    (x : (C(I, ℝ) × C(I, ℝ)) × C(I, ℝ)) :
+    testVal μ ν x = ∫ θ, extI x.1.1 θ ∂μ + ∫ m, extI x.1.2 m ∂ν := rfl
+
 /-- The **envelope** of a test function: `c(θ) = sup_m (-g m - h m (θ - m))`, the least
 function forced on `f` by `f(θ) + g(m) + h(m) (θ - m) ≥ 0`. -/
 noncomputable def envelope (g h : C(I, ℝ)) (θ : ℝ) : ℝ := ⨆ m : I, (-g m - h m * (θ - m))
@@ -85,8 +89,8 @@ variable (g h : C(I, ℝ))
 lemma envelope_bdd (θ : ℝ) : BddAbove (range fun m : I => -g m - h m * (θ - m)) :=
   ⟨‖g‖ + ‖h‖ * (1 + |θ|), by
     rintro _ ⟨m, rfl⟩
-    have hg := (Real.norm_eq_abs _).symm.trans_le (g.norm_coe_le_norm m)
-    have hh := (Real.norm_eq_abs _).symm.trans_le (h.norm_coe_le_norm m)
+    have hg := abs_apply_le_norm' g m
+    have hh := abs_apply_le_norm' h m
     have : |h m * (θ - m)| ≤ ‖h‖ * (1 + |θ|) := by
       rw [abs_mul]; exact mul_le_mul hh ((abs_sub _ _).trans (by linarith [abs_le_one_of_mem m]))
         (abs_nonneg _) (norm_nonneg _)
@@ -127,8 +131,7 @@ theorem testVal_nonneg (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : Post
   have h3 := integral_mono_ae (integrable_extI (ν := G.ν) g).neg (integrable_of_mem G.mem hc)
     (G.mem.mono fun m hm => neg_le_envelope g h ⟨m, hm⟩)
   simp only [Pi.neg_apply, integral_neg] at h3
-  show 0 ≤ ∫ θ, extI f θ ∂μ + ∫ m, extI g m ∂G.ν
-  linarith
+  rw [testVal_apply]; linarith
 
 /-! ### The coupling as a positive functional -/
 
@@ -144,20 +147,25 @@ def posCone (X : Type*) [TopologicalSpace X] : PointedCone ℝ C(X, ℝ) where
 lemma mem_posCone {X : Type*} [TopologicalSpace X] {f : C(X, ℝ)} : f ∈ posCone X ↔ 0 ≤ f :=
   Iff.rfl
 
-/-- **The coupling functional** (M. Riesz extension): a positive linear functional on
-`C([0, 1]²)` giving each test function its value `∫ f dμ + ∫ g dν`. -/
-theorem exists_coupling_functional (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : PosteriorMeans μ) :
-    ∃ Λ : C(I × I, ℝ) →ₗ[ℝ] ℝ, (∀ h, 0 ≤ h → 0 ≤ Λ h) ∧ ∀ x, Λ (testFn x) = testVal μ G.ν x := by
-  -- `testVal` vanishes on the kernel of `testFn`, so it is a functional on the test functions
+/-- `testVal` descends to the space of test functions: it vanishes on the kernel of `testFn`,
+by the dual inequality applied to `±x`. -/
+lemma exists_range_functional (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : PosteriorMeans μ) :
+    ∃ ψ : LinearMap.range testFn →ₗ[ℝ] ℝ,
+      ∀ x, ψ ⟨testFn x, LinearMap.mem_range_self _ x⟩ = testVal μ G.ν x := by
   have hker : LinearMap.ker testFn ≤ LinearMap.ker (testVal μ G.ν) := fun x hx => by
     rw [LinearMap.mem_ker] at hx ⊢
     have h1 := testVal_nonneg hμ G x (by rw [hx])
     have h2 := testVal_nonneg hμ G (-x) (by rw [map_neg, hx, neg_zero])
     rw [map_neg] at h2; linarith
-  let ψ : LinearMap.range testFn →ₗ[ℝ] ℝ := (LinearMap.ker testFn).liftQ (testVal μ G.ν) hker ∘ₗ
-    testFn.quotKerEquivRange.symm.toLinearMap
-  have hψ : ∀ x, ψ ⟨testFn x, LinearMap.mem_range_self _ x⟩ = testVal μ G.ν x := fun x => by
-    simp [ψ, LinearMap.quotKerEquivRange_symm_apply_image]
+  exact ⟨(LinearMap.ker testFn).liftQ (testVal μ G.ν) hker ∘ₗ
+    testFn.quotKerEquivRange.symm.toLinearMap,
+    fun x => by simp [LinearMap.quotKerEquivRange_symm_apply_image]⟩
+
+/-- **The coupling functional** (M. Riesz extension): a positive linear functional on
+`C([0, 1]²)` giving each test function its value `∫ f dμ + ∫ g dν`. -/
+theorem exists_coupling_functional (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : PosteriorMeans μ) :
+    ∃ Λ : C(I × I, ℝ) →ₗ[ℝ] ℝ, (∀ h, 0 ≤ h → 0 ≤ Λ h) ∧ ∀ x, Λ (testFn x) = testVal μ G.ν x := by
+  obtain ⟨ψ, hψ⟩ := exists_range_functional hμ G
   -- it is positive, and every function lies below a constant test function
   have hnonneg : ∀ y : LinearMap.range testFn, (y : C(I × I, ℝ)) ∈ posCone (I × I) →
       0 ≤ ψ y := by
@@ -166,7 +174,7 @@ theorem exists_coupling_functional (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 
       (x : C(I × I, ℝ)) + y ∈ posCone (I × I) := fun y =>
     ⟨⟨testFn ((‖y‖ • 1, 0), 0), LinearMap.mem_range_self _ _⟩,
       mem_posCone.2 <| ContinuousMap.le_def.2 fun z => by
-        have := (Real.norm_eq_abs _).symm.trans_le (y.norm_coe_le_norm z)
+        have := abs_apply_le_norm' y z
         have h1 : testFn ((‖y‖ • (1 : C(I, ℝ)), 0), 0) z = ‖y‖ := by simp
         simp only [ContinuousMap.zero_apply, ContinuousMap.add_apply, h1]
         linarith [neg_abs_le (y z)]⟩
@@ -215,10 +223,6 @@ lemma mean_eq_of_continuous {π : Measure (ℝ × ℝ)} [IsFiniteMeasure π]
 
 /-! ### The signal -/
 
-@[simp] lemma testVal_apply (ν : Measure ℝ) [IsFiniteMeasure ν]
-    (x : (C(I, ℝ) × C(I, ℝ)) × C(I, ℝ)) :
-    testVal μ ν x = ∫ θ, extI x.1.1 θ ∂μ + ∫ m, extI x.1.2 m ∂ν := rfl
-
 lemma extI_zero : extI 0 = 0 := rfl
 
 lemma integral_extI_onI {ν : Measure ℝ} (hν : ∀ᵐ x ∂ν, x ∈ Icc (0 : ℝ) 1) {f : ℝ → ℝ}
@@ -257,19 +261,23 @@ theorem exists_coupling (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : Pos
 lemma integrable_mul_bdd {π : Measure (ℝ × ℝ)} [IsFiniteMeasure π] {q : ℝ × ℝ → ℝ}
     (hq : Continuous q) (hmem : ∀ᵐ z ∂π, q z ∈ Icc (0 : ℝ) 1) (g : ℝ →ᵇ ℝ) :
     Integrable (fun z => q z * g z.2) π :=
-  (integrable_const ‖g‖).mono' (hq.mul (g.continuous.comp continuous_snd)).aestronglyMeasurable
-    (hmem.mono fun z hz => by
-      rw [norm_mul]
-      exact mul_le_of_le_one_left (norm_nonneg _) (by
-        rw [Real.norm_eq_abs, abs_le]; exact ⟨by linarith [hz.1], hz.2⟩) |>.trans
-        (g.norm_coe_le_norm _))
+  integrable_mul_of_mem hq hmem g.continuous.measurable fun x =>
+    (Real.norm_eq_abs _).symm.trans_le (g.norm_coe_le_norm x)
+
+/-- A law on `ℝ` is pinned down by its integrals of bounded continuous functions: the image of
+`π` under `φ` is `ν` when they integrate each `f` alike. -/
+lemma map_eq_of_integral {π : Measure (ℝ × ℝ)} [IsFiniteMeasure π] {ν : Measure ℝ}
+    [IsFiniteMeasure ν] {φ : ℝ × ℝ → ℝ} (hφ : Continuous φ)
+    (h : ∀ f : ℝ →ᵇ ℝ, ∫ z, f (φ z) ∂π = ∫ x, f x ∂ν) : π.map φ = ν :=
+  ext_of_forall_integral_eq_of_IsFiniteMeasure fun f => by
+    rw [integral_map hφ.measurable.aemeasurable f.continuous.aestronglyMeasurable, h f]
 
 /-- **Strassen's theorem on `[0, 1]`**: every distribution of posterior means is the law of
 the posterior mean of a signal with the given prior. -/
 theorem PosteriorMeans.exists_signal (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ) 1) (G : PosteriorMeans μ) :
     ∃ S : Signal, S.prior = μ ∧ S.posteriorMeans.ν = G.ν := by
   obtain ⟨π, hπ, h1, h2, htest⟩ := exists_coupling hμ G
-  -- the mean condition, on bounded continuous test functions `h`
+  -- the mean condition, on bounded continuous test functions `g`
   have hmean : ∀ g : ℝ →ᵇ ℝ, ∫ z, z.1 * g z.2 ∂π = ∫ z, z.2 * g z.2 ∂π := fun g => by
     have := htest ((0, 0), onI g g.continuous) (fun z => (z.1 - z.2) * g z.2) (by fun_prop)
       fun z => by simp [toR2, onI]; ring
@@ -278,20 +286,16 @@ theorem PosteriorMeans.exists_signal (hμ : ∀ᵐ θ ∂μ, θ ∈ Icc (0 : ℝ
       (integrable_mul_bdd continuous_snd h2 g), sub_eq_zero] at this
   let S : Signal := ⟨π, h1, h2, fun g hg _ _ => mean_eq_of_continuous h1 h2 hmean hg⟩
   -- the marginals agree with `μ` and `ν` on bounded continuous functions
-  refine ⟨S, show π.map Prod.fst = μ from ext_of_forall_integral_eq_of_IsFiniteMeasure fun f => ?_,
-    show π.map Prod.snd = G.ν from ext_of_forall_integral_eq_of_IsFiniteMeasure fun f => ?_⟩
+  refine ⟨S, map_eq_of_integral continuous_fst fun f => ?_,
+    map_eq_of_integral continuous_snd fun f => ?_⟩
   · have := htest ((onI f f.continuous, 0), 0) (fun z => f z.1) (by fun_prop)
       fun z => by simp [toR2, onI]
-    simp only [testVal_apply, extI_zero, Pi.zero_apply, integral_zero, add_zero,
-      integral_extI_onI hμ] at this
-    rw [integral_map measurable_fst.aemeasurable f.continuous.aestronglyMeasurable]
-    exact this
+    simpa only [testVal_apply, extI_zero, Pi.zero_apply, integral_zero, add_zero,
+      integral_extI_onI hμ] using this
   · have := htest ((0, onI f f.continuous), 0) (fun z => f z.2) (by fun_prop)
       fun z => by simp [toR2, onI]
-    simp only [testVal_apply, extI_zero, Pi.zero_apply, integral_zero, zero_add,
-      integral_extI_onI G.mem] at this
-    rw [integral_map measurable_snd.aemeasurable f.continuous.aestronglyMeasurable]
-    exact this
+    simpa only [testVal_apply, extI_zero, Pi.zero_apply, integral_zero, zero_add,
+      integral_extI_onI G.mem] using this
 
 /-- **An optimal signal exists** for a bounded upper semicontinuous payoff, and its value is the
 least expected cost of a price. -/
