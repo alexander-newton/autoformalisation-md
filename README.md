@@ -20,6 +20,7 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Doval–Skreta (2022)**: canonical mechanisms are without loss under limited commitment, T periods | `LimitedCommitment.lean` | `DovalSkreta.canonical_isEquilibrium`, `canonical_truthful`, `AnyPlay.canonical_spec`, `AnyPlay.le_of_canonical_le`, `outside_le_agentValue` |
 | Lagrangian strong duality over a compact convex set | `Duality.lean` | `Duality.strong_duality` |
 | **Persuasion LP duality with state prices** (after Kolotilin 2018; Dworczak–Kolotilin) | `Persuasion.lean` | `Persuasion.value_eq_iInf_DK`, `value_eq_iInf`, `dk_weak`, `price_isDKPrice` |
+| **Dworczak–Kolotilin (2024)**: strong persuasion duality, continuum of states | `MeanDuality.lean` | `MeanPersuasion.strong_duality`, `PosteriorMeans.value_le`, `Signal.value_le_priceValue` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
 
 ## What is formalised
@@ -153,6 +154,20 @@ measurable and bounded on [0, 1] (`IsPayoff`), so step payoffs such as 1{m ≥ t
 * **Corollaries.** Full disclosure is optimal for convex V (`full_optimal`); no disclosure is
   optimal for concave V (`silent_optimal`), priced by a supporting line at the prior mean.
 
+### Strong duality with a continuum of states
+Following Kolotilin (2018), the sender chooses a *distribution of posterior means* ν: a law on
+[0, 1] that is a mean-preserving contraction of the prior, ∫ q dν ≤ ∫ q dμ for every convex q
+(`PosteriorMeans`). Every signal induces one (`Signal.posteriorMeans`).
+* **Strong duality** (`strong_duality`). For continuous V, an optimal ν exists, and its value
+  equals the least expected cost of a price (`priceValue`).
+* **The proof is one separation.** In C([0, 1]) × ℝ, the pairs (g, t) with g < p − V and
+  ∫ p dμ < t for some convex p form an open convex set missing (0, priceValue). Pushing the set
+  up in t and down in g makes the separating functional positive (`Separates`). Constant and
+  scaled prices then show it is normalised and below μ on convex functions. By
+  Riesz–Markov–Kakutani it is a probability measure ν: a distribution of posterior means worth
+  at least the dual value. Weak duality closes the gap.
+* **Signals** (`Signal.value_le_priceValue`). No signal is worth more than the dual value.
+
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
   nonnegativity is not needed by the proofs.
@@ -197,8 +212,13 @@ measurable and bounded on [0, 1] (`IsPayoff`), so step payoffs such as 1{m ≥ t
 * **Persuasion, finite case** (`Persuasion.lean`). Finite states and actions. The dual infimum
   is shown to equal the value but is not shown to be attained.
 * **Persuasion, continuum of states** (`MeanPersuasion.lean`).
-  * **Strong duality is not proved.** We prove weak duality and the sufficiency of
-    complementary slackness, not that the value equals the least price cost in general.
+  * **Strong duality is over distributions of posterior means**, as in Kolotilin (2018) and
+    Dworczak–Martini (2019), not over signals. That every distribution of posterior means is
+    induced by a signal is Strassen's theorem, which is not formalised. So
+    `strong_duality` gives an optimal ν, and `Signal.value_le_priceValue` bounds every signal,
+    but no optimal signal is constructed.
+  * Strong duality needs V continuous; Dworczak–Kolotilin allow upper semicontinuous V. The
+    dual infimum is not shown to be attained.
   * The sender's payoff depends on the posterior mean only (the "linear" case).
   * Prices must be convex on all of ℝ, not just on [0, 1]. This excludes convex functions on
     [0, 1] with infinite slope at an endpoint. DK allow any p with ∫ p dν ≥ V(ν) for every
@@ -238,5 +258,5 @@ Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 
 ## Roadmap
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
-* Strong duality for continuous-state persuasion (Dworczak–Kolotilin), with attainment of the
-  dual.
+* Strassen's theorem in one dimension (an optimal signal, not just an optimal distribution of
+  posterior means), attainment of the dual, and upper semicontinuous V.
