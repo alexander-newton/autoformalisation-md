@@ -17,7 +17,9 @@ the points of `S`. **Condition (M)** (`CondM`) for a signal says two things. Fir
 * **Remark 1** (`optimal_iff_maxMoments`): given one optimal signal `π*`, a signal is optimal iff
   its means lie in `S* = {x | p_{supp π*_X}(x) = v x}` and (M) holds with `S = S*`.
 
-The "if" directions hold for any prior. The "only if" directions assume the prior has full
+The "if" directions hold for any prior, with (M) asked on all of `X = [0, 1]` (for a prior
+without full support DK ask it only on the convex hull of `supp μ₀`). The "only if" directions
+assume the prior has full
 support on `[0, 1]`. This is DK's convention `Ω = supp μ₀`, with `X = Ω`, so DK's convex-roof
 extension of `p_S` off `Ω` is not needed. Without full support they fail: for `μ₀ = δ_{1/2}` and
 `v x = x²`, the only feasible signal is optimal but violates (M).

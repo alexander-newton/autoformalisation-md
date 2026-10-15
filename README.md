@@ -222,7 +222,7 @@ over 1-Lipschitz test functions vanishing at 0 (`krDist`).
 | Corollary 1 (complementary slackness, iff) | `complementary_slackness` | DK's, in the almost-everywhere form their proof passes through. |
 | Lemma 6, Theorem 3 (dual attainment ⇔ superdifferentiable ⇔ bounded steepness) | `dual_attainment_tfae`, `gale` | DK's (Lemma 6 and Gale's theorem). DK separate in M(Ω) with the KR norm. Here beliefs are embedded in the bounded functions on 1-Lipschitz test functions (`embed`), and the price is the supporting hyperplane at point masses (`hyperplanePrice`). |
 | Theorem 4 (Lipschitz preservation) | `concaveClosure_lip`, `boundedSteepness_of_lip` | Different. DK perturb posteriors. Here it follows from Theorem 5: the price for moments is an L-Lipschitz supergradient at every prior. |
-| Corollary 2 (strong duality for Lipschitz v) | `exists_optimal_statePrice` | Different. DK use Theorems 3 and 4. Here: the best convex price exists (`exists_optimal_price`, by Arzelà–Ascoli), and the two dual values agree. |
+| Corollary 2 (strong duality for Lipschitz v) | `exists_optimal_statePrice` (dual attainment), `exists_optimal_signal_of_lip` (primal attainment, no gap) | Different. DK use Theorems 3 and 4. Here: the best convex price exists (`exists_optimal_price`, by Arzelà–Ascoli), and the two dual values agree. |
 | Lemma 7 (supporting lines with slope in [−L, L]) | `IsStatePrice.exists_line`, `IsStatePrice.exists_slope` | Different, one-dimensional. DK separate from the epigraph of the convex roof and select by the measurable maximum theorem. Here two-point beliefs show every left secant lies below every right secant (`IsStatePrice.le_chord`); the slope is the steepest left secant, and a measurable choice is the clamped right derivative of the hull of these lines. |
 | Theorem 5 (prices for moments, (i) and (ii), and both converses) | `momentPrice_spec`, `optimal_of_momentPrice`, `optimal_of_momentSlope` | DK's: p̄ is the supremum of the lines of Lemma 7 (`lineSup`), below p, hence equal to it where the prior lives. |
 | Theorem 6 (optimal ⇔ condition (M) with S = supp π_X) | `optimal_iff_condM`, `optimal_of_condM` | DK's, using the price for moments of Theorem 5 in place of the convex roof (equal on Ω = X). The tangent step is Fermat's rule along a segment (`tangent_le`). |
@@ -284,7 +284,8 @@ structural results of Sections 4.4–5 (Theorems 7–8, Propositions 1–2).
     V upper semicontinuous on [0, 1] extends, e.g. by composing with the projection onto
     [0, 1]) and `IsPayoff V`: measurable (already implied by upper semicontinuity) and bounded
     on [0, 1]. An upper semicontinuous V on [0, 1] is bounded above, so the only extra
-    assumption is a lower bound; DK allow V unbounded below.
+    assumption is a lower bound. Dworczak–Kolotilin (2024) also assume V bounded; only their
+    primal-attainment Lemma 2 allows V = −∞.
   * **Dual attainment** is proved only for Lipschitz V (`exists_optimal_price`), as in
     Dworczak–Kolotilin (2024, Corollary 2); for general upper semicontinuous V it can fail
     (their Theorem 3, formalised as `dual_attainment_tfae`, characterises when it holds). With prices convex on all of ℝ it can fail
@@ -315,7 +316,12 @@ structural results of Sections 4.4–5 (Theorems 7–8, Propositions 1–2).
     `Icc 0 1 ⊆ μ.support`. Without full support they fail: for μ₀ = δ_{1/2} and v(x) = x², the
     only feasible signal is optimal but violates (M).
   * Corollary 1 is stated almost everywhere in the posterior mean, not at every posterior in the
-    support.
+    support. Posteriors are conditional on the posterior mean (a garbling of DK's distribution
+    τ of posteriors), and are defined only almost everywhere.
+  * Condition (M) always uses X = [0, 1] and the tangent formula on all of X. For a prior
+    without full support this is stronger than DK's (M), which asks p_S ≥ v only on
+    conv(supp μ₀) and uses the convex roof off supp μ₀. So there `optimal_of_condM` is a weaker
+    sufficient condition than DK's.
   * State prices and prices for moments are functions on ℝ; only their values on [0, 1]
     matter. Prices for moments are convex on all of ℝ. Payoffs must be measurable on ℝ and
     bounded on [0, 1] (`IsPayoff`). "Lipschitz on [0, 1]" is the hypothesis
@@ -323,7 +329,11 @@ structural results of Sections 4.4–5 (Theorems 7–8, Propositions 1–2).
   * Theorems 2–3 need v upper semicontinuous on ℝ; for Lipschitz v this is arranged internally
     (`extendI`). In Theorem 6, "continuously differentiable on X" is `HasDerivWithinAt v (v' x)
     [0, 1] x` for x ∈ [0, 1] with v' continuous on [0, 1] (one-sided at the endpoints, as in DK's
-    footnote 21). In (M), the slope q of Theorem 5 must satisfy |q| ≤ L on all of ℝ.
+    footnote 21). In Theorem 5 (ii) and `optimal_of_momentSlope`, |q| ≤ L is required on all
+    of ℝ (DK: on X); clamping q makes this harmless.
+  * The Lipschitz and C¹ results also take `IsPayoff v`. Boundedness on [0, 1] already follows,
+    and measurability on ℝ is irrelevant (only v on [0, 1] matters, `isStatePrice_congr`), so
+    this hypothesis is not minimal.
   * Theorem 4 is stated one-sidedly, V̂(η) − V̂(μ₀) ≤ L · d_KR(η, μ₀), for all priors η, μ₀
     on [0, 1]; swapping them gives the other side.
 
@@ -347,6 +357,10 @@ lake exe cache get   # optional: prebuilt Mathlib
 lake build
 ```
 Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
+
+`test/Sat.lean` checks that the hypotheses of the Dworczak–Kolotilin theorems are satisfiable
+(uniform prior, v(x) = x²), and `test/Counter.lean` checks the full-support counterexample for
+Theorem 6. Run each with `lake env lean test/Sat.lean`.
 
 ## Roadmap
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.

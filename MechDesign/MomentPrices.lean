@@ -371,8 +371,9 @@ theorem momentPrice_spec
     (S.mean_mem.mono fun z hz => line_le_lineSup subset_rfl hB hqL ⟨z.2, hz⟩ z.1) (hS ▸ hval)⟩
 
 omit [IsProbabilityMeasure μ] hμ in
-/-- **Theorem 5, converse via (i)**: a convex price for moments above `v` that a signal pays in
-full certifies the signal optimal. (DK note that `v` need only be measurable and bounded.) -/
+/-- **Theorem 5, converse via (i)**: if a signal pays in full a convex price for moments above
+`v`, its value bounds that of every signal with prior `μ`; so a feasible such signal is optimal.
+(DK note that `v` need only be measurable and bounded.) -/
 theorem optimal_of_momentPrice {S : Signal} {pM : ℝ → ℝ}
     (hconv : ConvexOn ℝ univ pM) (hle : ∀ x ∈ Icc (0 : ℝ) 1, v x ≤ pM x)
     (heq : S.value v = ∫ ω, pM ω ∂μ) :
