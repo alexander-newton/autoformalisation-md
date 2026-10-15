@@ -24,6 +24,10 @@ special case of the paper's result, or carries an extra hypothesis, this README 
 | **Strassen (1965) on [0, 1]**: every distribution of posterior means comes from a signal; an optimal signal exists | `Strassen.lean` | `MeanPersuasion.PosteriorMeans.exists_signal`, `exists_optimal_signal` |
 | **The best price exists** for Lipschitz V (dual attainment; the one-dimensional case of Dworczak–Kolotilin 2024, Corollary 2 and Theorem 5) | `PriceAttainment.lean` | `MeanPersuasion.exists_optimal_price` |
 | **Dworczak–Kolotilin**, continuum of states: weak duality and the verification theorem (sufficiency of complementary slackness) | `MeanPersuasion.lean` | `MeanPersuasion.Signal.value_le`, `Signal.optimal_of_slack`, `full_optimal`, `silent_optimal` |
+| **Dworczak–Kolotilin (2024)**, Theorems 1–2 and Corollary 1, with state prices | `StatePrices.lean` | `MeanPersuasion.Signal.value_le_statePrice`, `exists_optimal_signal_stateValue`, `complementary_slackness` |
+| **Dworczak–Kolotilin (2024)**, Theorem 3: dual attainment iff bounded steepness | `DualAttainment.lean` | `MeanPersuasion.dual_attainment_tfae`, `gale` |
+| **Dworczak–Kolotilin (2024)**, Theorems 4–5, Lemma 7 and Corollary 2: prices for moments | `MomentPrices.lean` | `MeanPersuasion.momentPrice_spec`, `optimal_of_momentPrice`, `optimal_of_momentSlope`, `concaveClosure_lip`, `exists_optimal_statePrice`, `IsStatePrice.exists_line` |
+| **Dworczak–Kolotilin (2024)**, Theorem 6 and Remark 1: prices from tangent lines | `TangentPrices.lean` | `MeanPersuasion.optimal_iff_condM`, `optimal_iff_maxMoments`, `optimal_of_condM` |
 
 ## What is formalised
 
@@ -202,6 +206,32 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
   below it (`Supported`), so the supremum of all such lines below it (`lowerHull`) is a price,
   and it costs at most the dual value.
 
+### Dworczak–Kolotilin (2024), result by result
+The one-dimensional moment case: states and posterior means lie in Ω = X = [0, 1], the prior
+μ₀ is arbitrary, and the payoff v depends on the posterior mean. A **state price** p
+(`IsStatePrice`) is Lipschitz on [0, 1] with v(E_ν ω) ≤ ∫ p dν for every belief ν on [0, 1],
+which is DK's dual (D); `stateValue` is its infimum. A signal's posteriors are the
+disintegration of its joint law (`Signal.posterior`). The concave closure V̂(η) is the value of
+persuasion at prior η (`concaveClosure`). The Kantorovich–Rubinstein distance is the supremum
+over 1-Lipschitz test functions vanishing at 0 (`krDist`).
+
+| DK result | Lean | Proof |
+|---|---|---|
+| Theorem 1 (weak duality) | `Signal.value_le_statePrice` | DK's: integrate the constraint over the posteriors. |
+| Theorem 2 (no duality gap, primal attainment), for upper semicontinuous v | `exists_optimal_signal_stateValue` | Different. DK apply Fenchel–Moreau in M(Ω) for Lipschitz v (using Theorem 4), approximate upper semicontinuous v by Lipschitz ones, and get primal attainment by compactness. Here: Hahn–Banach and Riesz–Markov–Kakutani over distributions of posterior means (`strong_duality`), Strassen's theorem for the signal, and convex prices are state prices (`IsPrice.isStatePrice`). |
+| Corollary 1 (complementary slackness, iff) | `complementary_slackness` | DK's, in the almost-everywhere form their proof passes through. |
+| Lemma 6, Theorem 3 (dual attainment ⇔ superdifferentiable ⇔ bounded steepness) | `dual_attainment_tfae`, `gale` | DK's (Lemma 6 and Gale's theorem). DK separate in M(Ω) with the KR norm. Here beliefs are embedded in the bounded functions on 1-Lipschitz test functions (`embed`), and the price is the supporting hyperplane at point masses (`hyperplanePrice`). |
+| Theorem 4 (Lipschitz preservation) | `concaveClosure_lip`, `boundedSteepness_of_lip` | Different. DK perturb posteriors. Here it follows from Theorem 5: the price for moments is an L-Lipschitz supergradient at every prior. |
+| Corollary 2 (strong duality for Lipschitz v) | `exists_optimal_statePrice` | Different. DK use Theorems 3 and 4. Here: the best convex price exists (`exists_optimal_price`, by Arzelà–Ascoli), and the two dual values agree. |
+| Lemma 7 (supporting lines with slope in [−L, L]) | `IsStatePrice.exists_line`, `IsStatePrice.exists_slope` | Different, one-dimensional. DK separate from the epigraph of the convex roof and select by the measurable maximum theorem. Here two-point beliefs show every left secant lies below every right secant (`IsStatePrice.le_chord`); the slope is the steepest left secant, and a measurable choice is the clamped right derivative of the hull of these lines. |
+| Theorem 5 (prices for moments, (i) and (ii), and both converses) | `momentPrice_spec`, `optimal_of_momentPrice`, `optimal_of_momentSlope` | DK's: p̄ is the supremum of the lines of Lemma 7 (`lineSup`), below p, hence equal to it where the prior lives. |
+| Theorem 6 (optimal ⇔ condition (M) with S = supp π_X) | `optimal_iff_condM`, `optimal_of_condM` | DK's, using the price for moments of Theorem 5 in place of the convex roof (equal on Ω = X). The tangent step is Fermat's rule along a segment (`tangent_le`). |
+| Remark 1 (the maximal set S* of optimal moments) | `optimal_iff_maxMoments` | DK's. |
+
+Not formalised: the general state spaces of Sections 2–3 (beyond the posterior-mean payoff),
+multidimensional moments, Lemma 1 (not needed: here V(ν) = v(E_ν ω) directly), and the
+structural results of Sections 4.4–5 (Theorems 7–8, Propositions 1–2).
+
 ## Scope (read before citing)
 * **Myerson, one buyer.** Allocations must lie in [0, 1]. The density is assumed continuous;
   nonnegativity is not needed by the proofs.
@@ -257,7 +287,7 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     assumption is a lower bound; DK allow V unbounded below.
   * **Dual attainment** is proved only for Lipschitz V (`exists_optimal_price`), as in
     Dworczak–Kolotilin (2024, Corollary 2); for general upper semicontinuous V it can fail
-    (their Theorem 3 characterises when it holds). With prices convex on all of ℝ it can fail
+    (their Theorem 3, formalised as `dual_attainment_tfae`, characterises when it holds). With prices convex on all of ℝ it can fail
     even for continuous V: with
     the uniform prior (or any prior of full support on [0, 1]) and V(m) = −√m, any price
     attaining the value would equal V on (0, 1] and so need infinite slope at 0.
@@ -276,6 +306,26 @@ Following Kolotilin (2018), the sender chooses a *distribution of posterior mean
     one, and conversely every joint law with the mean condition is induced by the experiment
     that announces m. The requirement that m lie in [0, 1] is part of the definition, although
     it follows from the mean condition (checked in the red-team audit, not in the library).
+* **Dworczak–Kolotilin (2024)** (`StatePrices.lean`, `DualAttainment.lean`,
+  `MomentPrices.lean`, `TangentPrices.lean`).
+  * Only the one-dimensional moment case: Ω = X = [0, 1] and V(ν) = v(E_ν ω).
+  * DK's convention is Ω = supp μ₀. Here the state space is [0, 1] and the prior may lack full
+    support; state prices are constrained on all beliefs on [0, 1]. Accordingly Theorem 5 says
+    p̄ = p on supp μ₀ (DK: on Ω), and the "only if" directions of Theorem 6 and Remark 1 assume
+    `Icc 0 1 ⊆ μ.support`. Without full support they fail: for μ₀ = δ_{1/2} and v(x) = x², the
+    only feasible signal is optimal but violates (M).
+  * Corollary 1 is stated almost everywhere in the posterior mean, not at every posterior in the
+    support.
+  * State prices and prices for moments are functions on ℝ; only their values on [0, 1]
+    matter. Prices for moments are convex on all of ℝ. Payoffs must be measurable on ℝ and
+    bounded on [0, 1] (`IsPayoff`). "Lipschitz on [0, 1]" is the hypothesis
+    `∀ x y ∈ [0, 1], v y ≤ v x + L |x − y|`.
+  * Theorems 2–3 need v upper semicontinuous on ℝ; for Lipschitz v this is arranged internally
+    (`extendI`). In Theorem 6, "continuously differentiable on X" is `HasDerivWithinAt v (v' x)
+    [0, 1] x` for x ∈ [0, 1] with v' continuous on [0, 1] (one-sided at the endpoints, as in DK's
+    footnote 21). In (M), the slope q of Theorem 5 must satisfy |q| ≤ L on all of ℝ.
+  * Theorem 4 is stated one-sidedly, V̂(η) − V̂(μ₀) ≤ L · d_KR(η, μ₀), for all priors η, μ₀
+    on [0, 1]; swapping them gives the other side.
 
 ## Style
 The proofs aim to read like a Halmos textbook: name the one concept a proof keeps circling,
@@ -302,3 +352,5 @@ Toolchain: Lean `v4.35.0`, Mathlib `v4.35.0`.
 * Doval–Skreta beyond Markov assessments (history-dependent PBE), and the Coasian dynamics.
 * Attainment of the dual beyond Lipschitz V (it can fail for some non-Lipschitz V with prices
   convex on ℝ), e.g. with prices convex on [0, 1] only.
+* Dworczak–Kolotilin beyond one dimension: general compact Ω, multidimensional moments, and the
+  structural results of their Sections 4.4–5.
