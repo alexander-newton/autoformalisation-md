@@ -286,14 +286,49 @@ def BoundedSteepness (v : ℝ → ℝ) (μ : Measure ℝ) : Prop :=
   ∃ L : ℝ, ∀ η : Measure ℝ, IsProbabilityMeasure η → (∀ᵐ x ∂η, x ∈ Icc (0 : ℝ) 1) →
     concaveClosure v η - concaveClosure v μ ≤ L * krDist η μ
 
+/-- **The price read off a hyperplane** `H` through `(μ, c)`: the state `ω` costs the height of
+the hyperplane at its point mass, `c + H(δ_ω - μ)`. -/
+noncomputable def hyperplanePrice (c : ℝ) (H : (TestFn →ᵇ ℝ) →L[ℝ] ℝ) (μ : Measure ℝ)
+    (ω : ℝ) : ℝ :=
+  c + H (delta ω - embed μ)
+
+section hyperplanePrice
+
+variable {c : ℝ} {H : (TestFn →ᵇ ℝ) →L[ℝ] ℝ} {μ : Measure ℝ}
+
+/-- A hyperplane of slope at most `K` gives a `K`-Lipschitz price, as point masses `δ_x, δ_y` are
+at most `|x - y|` apart. -/
+lemma lipschitzWith_hyperplanePrice {K : ℝ} (hK : 0 ≤ K) (hH : ∀ x, |H x| ≤ K * ‖x‖) :
+    LipschitzWith (Real.toNNReal K) (hyperplanePrice c H μ) :=
+  LipschitzWith.of_le_add_mul' K fun x y => by
+    have := hH (delta x - delta y)
+    have := norm_delta_sub_le x y
+    simp only [hyperplanePrice, map_sub, Real.dist_eq] at *
+    nlinarith [le_abs_self (H (delta x) - H (delta y))]
+
+/-- A linear map commutes with the integral: the price costs `c + H(η - μ)` under `η`. -/
+lemma integral_hyperplanePrice (η : Measure ℝ) [IsProbabilityMeasure η] :
+    ∫ ω, hyperplanePrice c H μ ω ∂η = c + H (embed η - embed μ) := by
+  have hHi : Integrable (fun ω => H (delta ω)) η := H.integrable_comp (integrable_delta η)
+  have h2 : Integrable (fun ω => H (delta ω) - H (embed μ)) η := hHi.sub (integrable_const _)
+  simp only [hyperplanePrice, map_sub]
+  rw [integral_add (integrable_const _) h2,
+    integral_sub hHi (integrable_const _), H.integral_comp_comm (integrable_delta η)]
+  simp [embed]
+
+end hyperplanePrice
+
 variable {μ : Measure ℝ} [IsProbabilityMeasure μ] (hμ : ∀ᵐ x ∂μ, x ∈ Icc (0 : ℝ) 1)
   (hv : IsPayoff v) (hvu : UpperSemicontinuous v)
 include hμ hv hvu
 
-/-- Every state price costs at least the dual value. -/
-lemma stateValue_le {p : ℝ → ℝ} (hp : IsStatePrice v p) : stateValue v μ ≤ ∫ x, p x ∂μ := by
-  obtain ⟨S, hS, -⟩ := exists_optimal_signal_stateValue hμ hv hvu
-  exact ciInf_le ⟨S.value v, by rintro _ ⟨q, rfl⟩; exact hS ▸ S.value_le_statePrice hv q.2⟩
+omit hvu in
+/-- Every state price costs at least the dual value: the costs are bounded below by the value of
+the uninformative signal. -/
+lemma stateValue_le {p : ℝ → ℝ} (hp : IsStatePrice v p) : stateValue v μ ≤ ∫ x, p x ∂μ :=
+  ciInf_le ⟨(silent hμ).value v, by
+    rintro _ ⟨q, rfl⟩
+    exact ((silent hμ).value_le_statePrice hv q.2).trans_eq (by rw [silent_prior hμ])⟩
     (⟨p, hp⟩ : {p // IsStatePrice v p})
 
 /-- (i) ⇒ (ii), DK Lemma 6: an optimal state price is a supergradient. -/
@@ -302,7 +337,7 @@ lemma superdifferentiable_of_optimal {p : ℝ → ℝ} (hp : IsStatePrice v p)
   obtain ⟨-, -, -, -, h⟩ := concaveClosure_spec hμ hv hvu
   refine ⟨p, hp.lipschitz, hp.measurable, h.trans hopt.symm, fun η _ hη => ?_⟩
   obtain ⟨-, -, -, -, hη'⟩ := concaveClosure_spec hη hv hvu
-  exact hη' ▸ stateValue_le hη hv hvu hp
+  exact hη' ▸ stateValue_le hη hv hp
 
 /-- (ii) ⇒ (i), DK Lemma 6: a supergradient is an optimal state price. -/
 lemma optimal_of_superdifferentiable (h : Superdifferentiable v μ) :
@@ -335,30 +370,62 @@ lemma lipschitzWith_extend {p : ℝ → ℝ} {K : NNReal} (hK : LipschitzOnWith 
       simpa [Subtype.dist_eq] using (LipschitzWith.projIcc (zero_le_one' ℝ)).dist_le_mul x y)
       K.2)
 
+omit hμ hv hvu in
+/-- An `L`-Lipschitz function, recentred at `0` and divided by `L > 0`, is a test function. -/
+noncomputable def TestFn.ofLip {P : ℝ → ℝ} {L : ℝ} (hP : ∀ x y, P x ≤ P y + L * |x - y|) (hL : 0 < L) :
+    TestFn :=
+  ⟨fun x => (P x - P 0) / L, LipschitzWith.of_dist_le_mul fun x y => by
+    have h2 := hP y x
+    rw [abs_sub_comm] at h2
+    rw [Real.dist_eq, Real.dist_eq, ← sub_div, sub_sub_sub_cancel_right, abs_div,
+      abs_of_pos hL, NNReal.coe_one, one_mul, div_le_iff₀ hL, _root_.abs_le]
+    constructor <;> linarith [hP x y], by simp⟩
+
 omit hv hvu in
-/-- (ii) ⇒ (iii): a `K`-Lipschitz supergradient bounds the steepness by `K + 1`. -/
+/-- **An `L`-Lipschitz price moves by at most `L` times the distance**: rescaled, it is a test
+function. -/
+lemma integral_sub_le_mul_krDist {P : ℝ → ℝ} {L : ℝ} (hP : ∀ x y, P x ≤ P y + L * |x - y|)
+    {η : Measure ℝ} [IsProbabilityMeasure η] (hη : ∀ᵐ x ∂η, x ∈ Icc (0 : ℝ) 1) :
+    ∫ x, P x ∂η - ∫ x, P x ∂μ ≤ L * krDist η μ := by
+  have hL : 0 ≤ L := by
+    have h1 := hP 0 1
+    have h2 := hP 1 0
+    norm_num at h1 h2; linarith
+  rcases hL.eq_or_lt with rfl | hL
+  · -- a `0`-Lipschitz price is constant
+    have hc : P = fun _ => P 0 := funext fun x => le_antisymm (by simpa using hP x 0)
+      (by simpa using hP 0 x)
+    rw [hc]; simp
+  have hPc : Continuous P :=
+    (LipschitzWith.of_le_add_mul' L fun x y => by simpa [Real.dist_eq] using hP x y).continuous
+  set f := TestFn.ofLip hP hL
+  have hint : ∀ ν : Measure ℝ, IsProbabilityMeasure ν → (∀ᵐ x ∂ν, x ∈ Icc (0 : ℝ) 1) →
+      ∫ x, f.1 x ∂ν = (∫ x, P x ∂ν - P 0) / L := fun ν _ hν => by
+    simp only [f, TestFn.ofLip]
+    rw [integral_div, integral_sub (integrable_of_mem hν (.of_continuous hPc))
+      (integrable_const _), integral_const]
+    simp
+  have h1 := le_krDist hμ hη f
+  rw [hint η inferInstance hη, hint μ inferInstance hμ, ← sub_div, sub_sub_sub_cancel_right,
+    div_le_iff₀ hL] at h1
+  linarith
+
+omit hv hvu in
+/-- (ii) ⇒ (iii): a `K`-Lipschitz supergradient bounds the steepness by `K`. -/
 lemma boundedSteepness_of_superdifferentiable (h : Superdifferentiable v μ) :
     BoundedSteepness v μ := by
   obtain ⟨p, ⟨K, hK⟩, -, heq, hle⟩ := h
-  have hK1 : (0 : ℝ) < K + 1 := by positivity
+  -- extend `p` from `[0, 1]` by its endpoint values; integrals do not change
   set P := fun x => p (projIcc (0 : ℝ) 1 zero_le_one x)
   have hP := lipschitzWith_extend hK
-  -- `g = (P - p 0) / (K + 1)` is a test function
-  let g : TestFn := ⟨fun x => (P x - p 0) / (K + 1), LipschitzWith.of_dist_le_mul fun x y => by
-      have h1 : |P x - P y| ≤ K * |x - y| := by simpa [Real.dist_eq] using hP.dist_le_mul x y
-      rw [Real.dist_eq, Real.dist_eq, ← sub_div, sub_sub_sub_cancel_right, abs_div,
-        abs_of_pos hK1, NNReal.coe_one, one_mul, div_le_iff₀ hK1]
-      nlinarith [abs_nonneg (x - y)], by simp [P]⟩
-  have hint : ∀ η : Measure ℝ, IsProbabilityMeasure η → (∀ᵐ x ∂η, x ∈ Icc (0 : ℝ) 1) →
-      ∫ x, g.1 x ∂η = (∫ x, p x ∂η - p 0) / (K + 1) := fun η _ hη => by
-    have hPi := integrable_of_mem hη (.of_continuous hP.continuous)
-    rw [integral_div, integral_sub hPi (integrable_const _), integral_const,
-      integral_congr_ae (hη.mono fun x hx => by simp [P, projIcc_of_mem _ hx] : P =ᵐ[η] p)]
-    simp
-  refine ⟨K + 1, fun η _ hη => ?_⟩
-  have h1 := le_krDist hμ hη g
-  rw [hint η inferInstance hη, hint μ inferInstance hμ, ← sub_div, sub_sub_sub_cancel_right,
-    div_le_iff₀ hK1] at h1
+  have hint : ∀ η : Measure ℝ, (∀ᵐ x ∂η, x ∈ Icc (0 : ℝ) 1) → ∫ x, P x ∂η = ∫ x, p x ∂η :=
+    fun η hη => integral_congr_ae (hη.mono fun x hx => by simp [P, projIcc_of_mem _ hx])
+  refine ⟨K, fun η _ hη => ?_⟩
+  have := integral_sub_le_mul_krDist hμ (P := P) (L := K) (fun x y => by
+    have := hP.dist_le_mul x y
+    rw [Real.dist_eq, Real.dist_eq] at this
+    linarith [le_abs_self (P x - P y)]) hη
+  rw [hint η hη, hint μ hμ] at this
   linarith [hle η inferInstance hη, heq]
 
 /-- The **hypograph** of `V̂` in the embedded space: pairs `(embed η, t)` with `t ≤ V̂(η)`. -/
@@ -414,25 +481,11 @@ lemma superdifferentiable_of_boundedSteepness (h : BoundedSteepness v μ) :
       simp only at ht ⊢; linarith)
   -- the price `p(ω) = V̂(μ) + H(δ_ω - μ)` is `L'`-Lipschitz, and integrates to `V̂(μ) + H(η - μ)`
   have hHL' : ∀ x, H x ≤ L' * ‖x‖ := hHL
-  have hHabs : ∀ x, |H x| ≤ L' * ‖x‖ := fun x => abs_le.2
-    ⟨by have := hHL' (-x); rw [map_neg, norm_neg] at this; linarith, hHL' x⟩
-  set p : ℝ → ℝ := fun ω => concaveClosure v μ + H (delta ω - embed μ)
-  have hpl : LipschitzWith (Real.toNNReal L') p := LipschitzWith.of_le_add_mul' L' fun x y => by
-    have := hHabs (delta x - delta y)
-    have := norm_delta_sub_le x y
-    simp only [p, map_sub, Real.dist_eq] at *
-    nlinarith [le_abs_self (H (delta x) - H (delta y)), le_max_right L 0]
-  have hint : ∀ η : Measure ℝ, IsProbabilityMeasure η →
-      ∫ ω, p ω ∂η = concaveClosure v μ + H (embed η - embed μ) := fun η _ => by
-    have hHi : Integrable (fun ω => H (delta ω)) η := H.integrable_comp (integrable_delta η)
-    have h2 : Integrable (fun ω => H (delta ω) - H (embed μ)) η := hHi.sub (integrable_const _)
-    simp only [p, map_sub]
-    rw [integral_add (integrable_const _) h2,
-      integral_sub hHi (integrable_const _), H.integral_comp_comm (integrable_delta η)]
-    simp [embed]
-  refine ⟨p, ⟨_, hpl.lipschitzOnWith⟩, hpl.continuous.measurable, by simp [hint μ inferInstance],
-    fun η _ hη => ?_⟩
-  rw [hint η inferInstance]
+  have hpl := lipschitzWith_hyperplanePrice (c := concaveClosure v μ) (μ := μ) (le_max_right L 0)
+    fun x => abs_le.2 ⟨by have := hHL' (-x); rw [map_neg, norm_neg] at this; linarith, hHL' x⟩
+  refine ⟨_, ⟨_, hpl.lipschitzOnWith⟩, hpl.continuous.measurable,
+    by simp [integral_hyperplanePrice], fun η _ hη => ?_⟩
+  rw [integral_hyperplanePrice]
   simpa using hH (embed η, concaveClosure v η) ⟨η, inferInstance, hη, rfl, le_rfl⟩
 
 /-- **Theorem 3 (dual attainment)** of Dworczak–Kolotilin: for a bounded upper semicontinuous
